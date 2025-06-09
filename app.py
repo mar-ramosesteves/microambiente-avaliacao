@@ -34,9 +34,10 @@ def avaliar():
         except:
             continue
 
-        tipo = "IDEAL" if "_ideal" in chave else "REAL"
-        cod = chave.replace("_ideal", "").replace("_real", "")
+        tipo = "IDEAL" if "_ideal" in chave.lower() else "REAL"
+        cod = chave.replace("_ideal", "").replace("_real", "").replace("_IDEAL", "").replace("_REAL", "")
         chave_matriz = f"{cod}_{tipo}"
+
 
         linha = afirmacoes[afirmacoes["CHAVE"] == chave_matriz]
         if linha.empty:
