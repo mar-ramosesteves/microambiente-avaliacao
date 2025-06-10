@@ -10,8 +10,13 @@ def aplicar_cors(response):
     response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
+# Suporte ao preflight da rota /enviar-avaliacao
+@app.route("/enviar-avaliacao", methods=["OPTIONS"])
+def preflight():
+    return '', 200
 
 # Carregar planilhas
 tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
