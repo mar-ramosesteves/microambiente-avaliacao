@@ -1,10 +1,16 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import pandas as pd
 
 app = Flask(__name__)
-from flask_cors import CORS
+CORS(app, supports_credentials=True)
 
-CORS(app, origins=["https://gestor.thehrkey.tech"])
+@app.after_request
+def aplicar_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return response
 
 
 # Carregar planilhas
