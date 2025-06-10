@@ -2,6 +2,10 @@ from flask import Flask, request, jsonify
 import pandas as pd
 
 app = Flask(__name__)
+from flask_cors import CORS
+
+CORS(app, origins=["https://gestor.thehrkey.tech"])
+
 
 # Carregar planilhas
 tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
