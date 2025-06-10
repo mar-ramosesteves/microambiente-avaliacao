@@ -92,17 +92,27 @@ if __name__ == "__main__":
 
 
 
-@app.route("/enviar-avaliacao", methods=["POST", "OPTIONS"])
+@app.route("/enviar-avaliacao", methods=["POST"])
 def enviar_avaliacao():
-    if request.method == "OPTIONS":
-        return '', 200
-
     dados = request.get_json()
     if not dados:
-        return jsonify({"erro": "Dados ausentes"}), 400
+        return jsonify({"erro": "Nenhum dado recebido"}), 400
 
-    # Aqui você pode apenas imprimir ou armazenar os dados recebidos como teste
     print("✅ Dados recebidos:", dados)
 
-    return jsonify({"mensagem": "Avaliação recebida com sucesso!"}), 200
+    # URL do Google Apps Script
+    url_script = "https://script.google.com/macros/s/AKfycbzrKBSwgRf9ckJrBDRkC1VsDibhYrWTJkLPhVMt83x_yCXnd_ex_CYuehT8pioTFvbxsw/exec"
+
+    try:
+        import requests
+        resposta = requests.post(url_script, json=dados)
+        if resposta.status_code == 200:
+            print("✅ Avaliação salva no Drive com sucesso!")
+            return jsonify({"status": "✅ Microambiente de Equipes → salva no Drive"}), 200
+        else:
+            print("❌ Erro ao salvar no Drive:", resposta.text)
+            return jsonify({"erro": "Erro ao salvar no Drive"}), 500
+    except Exception as e:
+        print("❌ Erro ao enviar dados:", str(e))
+        return jsonify({"erro": str(e)}), 500
 
