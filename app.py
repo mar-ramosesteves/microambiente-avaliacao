@@ -89,3 +89,20 @@ def avaliar():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+
+@app.route("/enviar-avaliacao", methods=["POST", "OPTIONS"])
+def enviar_avaliacao():
+    if request.method == "OPTIONS":
+        return '', 200
+
+    dados = request.get_json()
+    if not dados:
+        return jsonify({"erro": "Dados ausentes"}), 400
+
+    # Aqui você pode apenas imprimir ou armazenar os dados recebidos como teste
+    print("✅ Dados recebidos:", dados)
+
+    return jsonify({"mensagem": "Avaliação recebida com sucesso!"}), 200
+
