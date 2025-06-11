@@ -167,10 +167,14 @@ def gerar_relatorio_microambiente():
             fh.seek(0)
             conteudo = json.load(fh)
             tipo = conteudo.get("tipo", "").lower()
-            if tipo.startswith("auto"):
+            if not tipo.startswith("microambiente"):
+                continue  # ignora arquivos que não são de microambiente
+
+            if "auto" in tipo:
                 auto = conteudo
-            else:
+            elif "equipe" in tipo:
                 equipe.append(conteudo)
+
 
         relatorio = {
             "empresa": empresa,
