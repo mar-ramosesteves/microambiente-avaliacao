@@ -123,9 +123,9 @@ def gerar_relatorio_microambiente():
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        email_lider = dados.get("emailLider")
+        emailLider = dados.get("emailLider")
 
-        if not all([empresa, codrodada, email_lider]):
+        if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
         SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -143,7 +143,7 @@ def gerar_relatorio_microambiente():
 
         id_empresa = buscar_id(empresa, PASTA_RAIZ)
         id_rodada = buscar_id(codrodada, id_empresa)
-        id_lider = buscar_id(email_lider, id_rodada)
+        id_lider = buscar_id(emailLider, id_rodada)
 
         if not id_lider:
             return jsonify({"erro": "Pasta do líder não encontrada"}), 404
@@ -179,13 +179,13 @@ def gerar_relatorio_microambiente():
         relatorio = {
             "empresa": empresa,
             "codrodada": codrodada,
-            "emailLider": email_lider,
+            "emailLider": emailLider,
             "autoavaliacao": auto,
             "avaliacoesEquipe": equipe,
             "mensagem": "✅ Relatório consolidado microambiente gerado com sucesso"
         }
 
-        nome_arquivo = f"relatorio_microambiente_{email_lider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        nome_arquivo = f"relatorio_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         binario = json.dumps(relatorio, indent=2, ensure_ascii=False).encode("utf-8")
         media = MediaIoBaseUpload(io.BytesIO(binario), mimetype="application/json")
         metadata = {"name": nome_arquivo, "parents": [id_lider]}
@@ -271,10 +271,10 @@ def grafico_autoavaliacao():
 
         # Subtítulo
         empresa = auto.get("empresa", "Empresa")
-        email_lider = auto.get("emailLider", "email")
+        emailLider = auto.get("emailLider", "email")
         codrodada = auto.get("codrodada", "")
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        subtitulo = f"Empresa: {empresa}   |   Autoavaliação - Líder: {email_lider} - Rodada: {codrodada} - {data_hora}   |   N = 1"
+        subtitulo = f"Empresa: {empresa}   |   Autoavaliação - Líder: {emailLider} - Rodada: {codrodada} - {data_hora}   |   N = 1"
         plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
 
         ax.legend()
@@ -340,7 +340,7 @@ def salvar_grafico_autoavaliacao():
         auto = None
         for arq in arquivos:
             nome = arq["name"]
-            if "microambiente" in nome and email_lider in nome and codrodada in nome:
+            if "microambiente" in nome and emailLider in nome and codrodada in nome:
                 req = service.files().get_media(fileId=arq["id"])
                 fh = io.BytesIO()
                 downloader = MediaIoBaseDownload(fh, req)
