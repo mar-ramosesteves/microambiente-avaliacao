@@ -412,9 +412,11 @@ def salvar_grafico_autoavaliacao():
 
         
         if "autoavaliacao" in auto:
-            numero_avaliacoes = 1
+            respostas = [k for k in auto["autoavaliacao"].keys() if k.startswith("Q") and (k.endswith("C") or k.endswith("k"))]
+            numero_avaliacoes = 1 if len(respostas) >= 96 else 0
         else:
             numero_avaliacoes = len(auto.get("avaliacoesEquipe", []))
+
 
         numero_avaliacoes = 1 if "autoavaliacao" in auto else len(auto.get("avaliacoesEquipe", []))
 
