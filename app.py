@@ -400,7 +400,7 @@ def salvar_grafico_autoavaliacao():
 
         # TÍTULO e SUBTÍTULO
         fig.suptitle("MICROAMBIENTE DE EQUIPES - DIMENSÕES", fontsize=14, weight="bold", y=0.97)
-        ax.set_title("Autoavaliação do líder - Percentual por dimensão", fontsize=11)
+        # ax.set_title("Autoavaliação do líder - Percentual por dimensão", fontsize=11)
 
         # Ajuste de layout para não cortar os títulos
         plt.tight_layout(rect=[0, 0, 1, 0.93])
