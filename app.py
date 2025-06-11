@@ -279,7 +279,8 @@ def grafico_autoavaliacao():
         plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
 
         ax.legend()
-        plt.xticks(rotation=45, ha="right")
+        ax.set_xticklabels(x, rotation=45, ha="right", fontsize=9)
+
 
         plt.tight_layout()
 
@@ -526,7 +527,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
 
         # --- GRÁFICO ---
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 6))
         x = resultado["SUBDIMENSAO"]
         ax.plot(x, resultado["REAL_%"], label="Como é", color="navy", marker='o')
         ax.plot(x, resultado["IDEAL_%"], label="Como deveria ser", color="orange", marker='o')
