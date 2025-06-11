@@ -410,7 +410,7 @@ def salvar_grafico_autoavaliacao():
 
 
 
-         1
+        
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
