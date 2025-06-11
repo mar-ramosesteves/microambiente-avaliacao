@@ -532,6 +532,10 @@ def salvar_grafico_autoavaliacao_subdimensao():
         ax.plot(x, resultado["REAL_%"], label="Como é", color="navy", marker='o')
         ax.plot(x, resultado["IDEAL_%"], label="Como deveria ser", color="orange", marker='o')
 
+        ax.set_xticks(range(len(x)))
+        ax.set_xticklabels(x, rotation=45, ha="right", fontsize=9)
+
+
         for i, v in enumerate(resultado["REAL_%"]):
             ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
         for i, v in enumerate(resultado["IDEAL_%"]):
