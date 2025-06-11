@@ -279,7 +279,8 @@ def grafico_autoavaliacao():
         plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
 
         ax.legend()
-        plt.xticks(rotation=20)
+        plt.xticks(rotation=45, ha="right")
+
         plt.tight_layout()
 
         nome_arquivo = "grafico_dimensoes_autoavaliacao.png"
