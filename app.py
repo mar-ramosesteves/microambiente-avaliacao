@@ -195,3 +195,97 @@ def gerar_relatorio_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/grafico-autoavaliacao", methods=["POST"])
+def grafico_autoavaliacao():
+    from datetime import datetime
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import json
+    import os
+
+    try:
+        # JSON enviado via POST
+        arquivo = request.files.get("arquivo_json")
+        if not arquivo:
+            return jsonify({"erro": "Arquivo JSON não enviado"}), 400
+
+        # Carregar planilhas auxiliares (já devem estar no diretório)
+        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+        pontos_maximos = pd.read_excel("pontos_maximos_dimensao_microambiente.xlsx")
+
+        # Parse do JSON
+        dados_json = json.load(arquivo)
+        auto = dados_json.get("autoavaliacao")
+        if not auto:
+            return jsonify({"erro": "Bloco 'autoavaliacao' não encontrado"}), 400
+
+        pontos_por_dimensao = {}
+
+        for i in range(1, 49):
+            q = f"Q{i:02d}"
+            real = int(auto.get(f"{q}C", 0))
+            ideal = int(auto.get(f"{q}k", 0))
+
+            chave = f"{q}_I{ideal}_R{real}"
+            linha = matriz[matriz["CHAVE"] == chave]
+            if linha.empty:
+                continue
+
+            dim = linha.iloc[0]["DIMENSAO"]
+            pontos_ideal = linha.iloc[0]["PONTUACAO_IDEAL"]
+            pontos_real = linha.iloc[0]["PONTUACAO_REAL"]
+
+            if dim not in pontos_por_dimensao:
+                pontos_por_dimensao[dim] = {"ideal": 0, "real": 0}
+
+            pontos_por_dimensao[dim]["ideal"] += pontos_ideal
+            pontos_por_dimensao[dim]["real"] += pontos_real
+
+        # Calcular % com base nos pontos máximos
+        porcentagens = {}
+        for _, row in pontos_maximos.iterrows():
+            dim = row["DIMENSAO"]
+            max_pontos = row["PONTOS_MAXIMOS_DIMENSAO"]
+            total = pontos_por_dimensao.get(dim, {"ideal": 0, "real": 0})
+            porcentagens[dim] = {
+                "ideal": round((total["ideal"] / max_pontos) * 100, 1),
+                "real": round((total["real"] / max_pontos) * 100, 1)
+            }
+
+        # Criar gráfico
+        labels = list(porcentagens.keys())
+        valores_ideal = [porcentagens[d]["ideal"] for d in labels]
+        valores_real = [porcentagens[d]["real"] for d in labels]
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.plot(labels, valores_real, marker="o", label="Como é", color="navy")
+        ax.plot(labels, valores_ideal, marker="o", label="Como deveria ser", color="darkorange")
+        ax.axhline(60, color="gray", linestyle="--", linewidth=1)
+        ax.set_ylim(0, 100)
+        ax.set_yticks(range(0, 101, 10))
+        ax.set_ylabel("% de Engajamento")
+        ax.set_title("MICROAMBIENTE DE EQUIPES – DIMENSÕES", fontsize=16, weight="bold")
+        ax.set_facecolor("#f2f2f2")
+
+        # Subtítulo
+        empresa = auto.get("empresa", "Empresa")
+        email_lider = auto.get("emailLider", "email")
+        codrodada = auto.get("codrodada", "")
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+        subtitulo = f"Empresa: {empresa}   |   Autoavaliação - Líder: {email_lider} - Rodada: {codrodada} - {data_hora}   |   N = 1"
+        plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
+
+        ax.legend()
+        plt.xticks(rotation=20)
+        plt.tight_layout()
+
+        nome_arquivo = "grafico_dimensoes_autoavaliacao.png"
+        plt.savefig(nome_arquivo)
+
+        return jsonify({"status": "✅ Gráfico gerado com sucesso", "arquivo": nome_arquivo}), 200
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
