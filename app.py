@@ -274,7 +274,7 @@ def grafico_autoavaliacao():
         emailLider = auto.get("emailLider", "email")
         codrodada = auto.get("codrodada", "")
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        subtitulo = f"Empresa: {empresa}   |   Autoavaliação - Líder: {emailLider} - Rodada: {codrodada} - {data_hora}   |   N = 1"
+        subtitulo = f"Empresa: {empresa}   |   Autoavaliação - Líder: {emailLider} - Rodada: {codrodada} - {data_hora}   |  N = {numero_avaliacoes}", fontsize=10)"
         plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
 
         ax.legend()
@@ -408,7 +408,7 @@ def salvar_grafico_autoavaliacao():
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
-        ax.text(0.5, 1.01, f"Autoavaliação - Líder: {emailLider} - Rodada: {codrodada} - {data_hora}",
+        ax.text(0.5, 1.01, f"Autoavaliação - Líder: {emailLider} - Rodada: {codrodada} - {data_hora} - |  N = {numero_avaliacoes}", fontsize=10)",
                 transform=ax.transAxes, ha="center", fontsize=9)
         ax.text(0.5, 0.97, "N = 1", transform=ax.transAxes, ha="center", fontsize=9)
 
