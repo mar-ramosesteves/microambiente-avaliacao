@@ -714,3 +714,141 @@ def salvar_grafico_media_equipe_dimensao():
         return jsonify({"erro": str(e)}), 500
 
 
+@app.route("/salvar-grafico-media-equipe-subdimensao", methods=["POST"])
+def salvar_grafico_media_equipe_subdimensao():
+    try:
+        from matplotlib import pyplot as plt
+        import matplotlib.ticker as mticker
+        import tempfile
+
+        dados = request.get_json()
+        empresa = dados.get("empresa")
+        codrodada = dados.get("codrodada")
+        emailLider = dados.get("emailLider")
+
+        if not all([empresa, codrodada, emailLider]):
+            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+
+        # GOOGLE DRIVE
+        SCOPES = ['https://www.googleapis.com/auth/drive']
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
+            scopes=SCOPES
+        )
+        service = build('drive', 'v3', credentials=creds)
+        PASTA_RAIZ = "1l4kOZwed-Yc5nHU4RBTmWQz3zYAlpniS"
+
+        def buscar_id(nome, pai):
+            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
+            return resp[0]["id"] if resp else None
+
+        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
+        id_rodada = buscar_id(codrodada.lower(), id_empresa)
+        id_lider = buscar_id(emailLider.lower(), id_rodada)
+
+        if not id_lider:
+            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+
+        arquivos = service.files().list(
+            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
+            fields="files(id, name)").execute().get("files", [])
+
+        dados_equipes = []
+        for arq in arquivos:
+            nome = arq["name"]
+            if "microambiente" in nome and emailLider in nome and codrodada in nome:
+                req = service.files().get_media(fileId=arq["id"])
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, req)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                fh.seek(0)
+                conteudo = json.load(fh)
+                for bloco in conteudo.get("avaliacoesEquipe", []):
+                    if bloco.get("tipo") == "microambiente_equipe":
+                        dados_equipes.append(bloco)
+
+        if not dados_equipes:
+            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 404
+
+        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+        pontos_max = pd.read_excel("pontos_maximos_subdimensao.xlsx")
+
+        calculo = []
+        for i in range(1, 49):
+            q = f"Q{i:02d}"
+            reais = []
+            ideais = []
+            for equipe in dados_equipes:
+                if f"{q}C" in equipe and f"{q}k" in equipe:
+                    reais.append(int(equipe[f"{q}C"]))
+                    ideais.append(int(equipe[f"{q}k"]))
+
+            if reais and ideais:
+                media_real = round(sum(reais) / len(reais))
+                media_ideal = round(sum(ideais) / len(ideais))
+                chave = f"{q}_I{media_ideal}_R{media_real}"
+                linha = matriz[matriz["CHAVE"] == chave]
+                if not linha.empty:
+                    sub = linha.iloc[0]["SUBDIMENSAO"]
+                    pi = linha.iloc[0]["PONTUACAO_IDEAL"]
+                    pr = linha.iloc[0]["PONTUACAO_REAL"]
+                    calculo.append((sub, pi, pr))
+
+        df = pd.DataFrame(calculo, columns=["SUBDIMENSAO", "IDEAL", "REAL"])
+        resultado = df.groupby("SUBDIMENSAO").sum().reset_index()
+        resultado = resultado.merge(pontos_max, on="SUBDIMENSAO")
+        resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
+        resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
+
+        # GRÁFICO
+        fig, ax = plt.subplots(figsize=(10, 6))
+        x = resultado["SUBDIMENSAO"]
+        ax.plot(x, resultado["REAL_%"], label="Como é", color="navy", marker='o')
+        ax.plot(x, resultado["IDEAL_%"], label="Como deveria ser", color="orange", marker='o')
+
+        for i, v in enumerate(resultado["REAL_%"]):
+            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
+        for i, v in enumerate(resultado["IDEAL_%"]):
+            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
+
+        ax.axhline(60, color="gray", linestyle="--", linewidth=1)
+        ax.set_ylim(0, 100)
+        ax.yaxis.set_major_locator(mticker.MultipleLocator(10))
+
+        fig.suptitle("MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES", fontsize=14, weight="bold", y=0.97)
+
+        plt.xticks(rotation=45)
+        plt.tight_layout(rect=[0, 0, 1, 0.93])
+
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+        numero_avaliacoes = len(dados_equipes)
+
+        ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
+        ax.text(0.5, 1.01, f"Média da Equipe - Líder: {emailLider} - Rodada: {codrodada} - {data_hora} | N = {numero_avaliacoes}",
+                transform=ax.transAxes, ha="center", fontsize=9)
+
+        ax.set_facecolor("#f2f2f2")
+        fig.patch.set_facecolor('#f2f2f2')
+        ax.legend()
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            caminho_pdf = tmp.name
+            plt.savefig(caminho_pdf, format="pdf")
+
+        nome_pdf = f"grafico_microambiente_media_equipe_subdimensao_{emailLider}_{codrodada}.pdf"
+        with open(caminho_pdf, "rb") as f:
+            media = MediaIoBaseUpload(f, mimetype="application/pdf")
+            metadata = {"name": nome_pdf, "parents": [id_lider]}
+            service.files().create(body=metadata, media_body=media).execute()
+
+        os.remove(caminho_pdf)
+        return jsonify({"mensagem": "✅ Gráfico de subdimensões gerado com sucesso!"})
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
+
