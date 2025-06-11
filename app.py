@@ -406,9 +406,21 @@ def salvar_grafico_autoavaliacao():
         # Ajuste de layout para não cortar os títulos
         plt.tight_layout(rect=[0, 0, 1, 0.93])
 
-        # Cálculo do número de avaliações baseado na quantidade de blocos de respostas
-numero_perguntas = 10  # ou o número real de perguntas por avaliação
-numero_avaliacoes = len(auto.get("dimensoes", [])) // numero_perguntas
+
+
+
+
+        
+        if "autoavaliacao" in auto:
+            numero_avaliacoes = 1
+        else:
+            numero_avaliacoes = len(auto.get("avaliacoesEquipe", []))
+
+        numero_avaliacoes = 1 if "autoavaliacao" in auto else len(auto.get("avaliacoesEquipe", []))
+
+
+       
+
 
 
 
