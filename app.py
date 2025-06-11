@@ -409,6 +409,7 @@ def salvar_grafico_autoavaliacao():
 
 
 
+        numero_avaliacoes = 1
 
         
 
