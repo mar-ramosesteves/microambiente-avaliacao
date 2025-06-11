@@ -307,9 +307,9 @@ def salvar_grafico_autoavaliacao():
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        email_lider = dados.get("emailLider")
+        emailLider = dados.get("emailLider")  # Corrigido aqui
 
-        if not all([empresa, codrodada, email_lider]):
+        if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
         # --- GOOGLE DRIVE ---
@@ -326,9 +326,9 @@ def salvar_grafico_autoavaliacao():
             resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
             return resp[0]["id"] if resp else None
 
-        id_empresa = buscar_id(empresa, PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada, id_empresa)
-        id_lider = buscar_id(email_lider, id_rodada)
+        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
+        id_rodada = buscar_id(codrodada.lower(), id_empresa)
+        id_lider = buscar_id(emailLider.lower(), id_rodada)  # Corrigido aqui
 
         if not id_lider:
             return jsonify({"erro": "Pasta do líder não encontrada."}), 404
@@ -339,7 +339,7 @@ def salvar_grafico_autoavaliacao():
 
         auto = None
         for arq in arquivos:
-            nome = arq["name"]
+            nome = arq["name"].lower()
             if "microambiente" in nome and "auto" in nome:
                 req = service.files().get_media(fileId=arq["id"])
                 fh = io.BytesIO()
@@ -357,9 +357,7 @@ def salvar_grafico_autoavaliacao():
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
         pontos_dim = pd.read_excel("pontos_maximos_dimensao_microambiente.xlsx")
 
-        respostas = [(k, int(v)) for k, v in auto.items() if k.startswith("Q")]
         calculo = []
-
         for i in range(1, 49):
             q_campo = f"Q{i:02d}C"
             q_kampo = f"Q{i:02d}k"
@@ -398,7 +396,7 @@ def salvar_grafico_autoavaliacao():
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
-        ax.text(0.5, 1.01, f"Autoavaliação - Líder: {email_lider} - Rodada: {codrodada} - {data_hora}",
+        ax.text(0.5, 1.01, f"Autoavaliação - Líder: {emailLider} - Rodada: {codrodada} - {data_hora}",
                 transform=ax.transAxes, ha="center", fontsize=9)
         ax.text(0.5, 0.97, "N = 1", transform=ax.transAxes, ha="center", fontsize=9)
 
@@ -412,7 +410,7 @@ def salvar_grafico_autoavaliacao():
             caminho_pdf = tmp.name
             plt.savefig(caminho_pdf, format="pdf")
 
-        nome_pdf = f"grafico_microambiente_autoavaliacao_{email_lider}_{codrodada}.pdf"
+        nome_pdf = f"grafico_microambiente_autoavaliacao_{emailLider}_{codrodada}.pdf"
         with open(caminho_pdf, "rb") as f:
             media = MediaIoBaseUpload(f, mimetype="application/pdf")
             metadata = {"name": nome_pdf, "parents": [id_lider]}
@@ -423,4 +421,3 @@ def salvar_grafico_autoavaliacao():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
-
