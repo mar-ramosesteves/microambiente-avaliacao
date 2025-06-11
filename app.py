@@ -339,9 +339,8 @@ def salvar_grafico_autoavaliacao():
 
         auto = None
         for arq in arquivos:
-            nome = arq["name"].lower()
-            if "microambiente" in nome.lower() and "auto" in nome.lower():
-
+            nome = arq["name"]
+            if "microambiente" in nome and email_lider in nome and codrodada in nome:
                 req = service.files().get_media(fileId=arq["id"])
                 fh = io.BytesIO()
                 downloader = MediaIoBaseDownload(fh, req)
@@ -349,8 +348,10 @@ def salvar_grafico_autoavaliacao():
                 while not done:
                     _, done = downloader.next_chunk()
                 fh.seek(0)
-                auto = json.load(fh)
+                conteudo = json.load(fh)
+                auto = conteudo.get("autoavaliacao")
                 break
+
 
         if not auto:
             return jsonify({"erro": "Autoavaliação não encontrada."}), 404
