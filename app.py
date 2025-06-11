@@ -1,25 +1,9 @@
+App.py quefunciona para envio do microambiente 10/06/2025
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-import json
-import io
-import os
-import time
-from datetime import datetime
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
-# 🔐 Autenticação Google Drive
-SCOPES = ['https://www.googleapis.com/auth/drive']
-creds = service_account.Credentials.from_service_account_info(
-    json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-    scopes=SCOPES
-)
-service = build('drive', 'v3', credentials=creds)
-PASTA_RAIZ = "1l4kOZwed-Yc5nHU4RBTmWQz3zYAlpniS"
-
-# 🚀 App Flask
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
@@ -31,14 +15,19 @@ def aplicar_cors(response):
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
-@app.route("/")
-def home():
-    return "API Microambiente Online"
+# Suporte ao preflight da rota /enviar-avaliacao
+@app.route("/enviar-avaliacao", methods=["OPTIONS"])
+def preflight():
+    return '', 200
 
-# 🧮 Carregamento das planilhas
+# Carregar planilhas
 tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
 tabela_sub = pd.read_excel("pontos_maximos_subdimensao.xlsx")
 matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+
+@app.route("/")
+def home():
+    return "API Microambiente Online"
 
 @app.route("/avaliar", methods=["POST"])
 def avaliar():
@@ -67,7 +56,7 @@ def avaliar():
 
         dim = linha.iloc[0]["DIMENSAO"]
         sub = linha.iloc[0]["SUBDIMENSAO"]
-        pontos = 100
+        pontos = 100  # ponto máximo por resposta
 
         acumulado.setdefault(sub, {}).setdefault(tipo, 0)
         acumulado[sub][tipo] += pontos
@@ -100,17 +89,20 @@ def avaliar():
         "subdimensoes": resultado_sub
     })
 
-@app.route("/enviar-avaliacao", methods=["POST", "OPTIONS"])
-def enviar_avaliacao():
-    if request.method == "OPTIONS":
-        return '', 200
+if __name__ == "__main__":
+    app.run(debug=True)
 
+
+
+@app.route("/enviar-avaliacao", methods=["POST"])
+def enviar_avaliacao():
     dados = request.get_json()
     if not dados:
         return jsonify({"erro": "Nenhum dado recebido"}), 400
 
     print("✅ Dados recebidos:", dados)
 
+    # URL do Google Apps Script
     url_script = "https://script.google.com/macros/s/AKfycbzrKBSwgRf9ckJrBDRkC1VsDibhYrWTJkLPhVMt83x_yCXnd_ex_CYuehT8pioTFvbxsw/exec"
 
     try:
@@ -126,90 +118,5 @@ def enviar_avaliacao():
         print("❌ Erro ao enviar dados:", str(e))
         return jsonify({"erro": str(e)}), 500
 
-@app.route("/gerar-relatorio-microambiente", methods=["POST", "OPTIONS"])
-def gerar_relatorio_microambiente():
-    if request.method == "OPTIONS":
-        response = jsonify({'status': 'CORS preflight OK'})
-        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-        return response
-
-    try:
-        dados = request.get_json()
-        empresa = dados.get("empresa")
-        codrodada = dados.get("codrodada")
-        email_lider = dados.get("emailLider")
-
-        if not all([empresa, codrodada, email_lider]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
-
-        def buscar_id_pasta(nome_pasta, id_pasta_mae):
-            query = f"'{id_pasta_mae}' in parents and name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            resultados = service.files().list(q=query, fields="files(id, name)").execute()
-            arquivos = resultados.get('files', [])
-            return arquivos[0]['id'] if arquivos else None
-
-        empresa_id = buscar_id_pasta(empresa, PASTA_RAIZ)
-        rodada_id = buscar_id_pasta(codrodada, empresa_id)
-        lider_id = buscar_id_pasta(email_lider, rodada_id)
-
-        if not lider_id:
-            return jsonify({"erro": f"Pasta do líder '{email_lider}' não encontrada."}), 404
-
-        antigos = service.files().list(
-            q=f"'{lider_id}' in parents and name contains 'relatorio_microambiente_' and trashed = false and mimeType = 'application/json'",
-            fields="files(id)").execute().get("files", [])
-
-        for arq in antigos:
-            service.files().delete(fileId=arq["id"]).execute()
-
-        query = f"'{lider_id}' in parents and (mimeType = 'application/json' or mimeType = 'text/plain') and trashed = false"
-        arquivos = service.files().list(q=query, fields="files(id, name)").execute().get('files', [])
-
-        auto = None
-        equipe = []
-
-        for arquivo in arquivos:
-            nome = arquivo['name']
-            file_id = arquivo['id']
-            request_drive = service.files().get_media(fileId=file_id)
-            fh = io.BytesIO()
-            downloader = MediaIoBaseDownload(fh, request_drive)
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-
-            fh.seek(0)
-            conteudo = json.load(fh)
-            tipo = conteudo.get("tipo", "").lower()
-            if tipo.startswith("auto"):
-                auto = conteudo
-            else:
-                equipe.append(conteudo)
-
-        relatorio_final = {
-            "empresa": empresa,
-            "codrodada": codrodada,
-            "emailLider": email_lider,
-            "autoavaliacao": auto,
-            "avaliacoesEquipe": equipe,
-            "mensagem": "Relatório consolidado de microambiente gerado com sucesso.",
-            "caminho": f"Avaliacoes RH / {empresa} / {codrodada} / {email_lider}"
-        }
-
-        nome_arquivo = f"relatorio_microambiente_{email_lider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        conteudo = json.dumps(relatorio_final, ensure_ascii=False, indent=2).encode("utf-8")
-        file_metadata = {"name": nome_arquivo, "parents": [lider_id]}
-        media = MediaIoBaseUpload(io.BytesIO(conteudo), mimetype="application/json")
-        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-        return jsonify(relatorio_final)
-
-    except Exception as e:
-        return jsonify({"erro": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(debug=True)
 
 
