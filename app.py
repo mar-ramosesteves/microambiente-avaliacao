@@ -391,10 +391,20 @@ def salvar_grafico_autoavaliacao():
         for i, v in enumerate(resultado["IDEAL_%"]):
             ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
 
+        # Linha de referência no gráfico
         ax.axhline(60, color="gray", linestyle="--", linewidth=1)
+
+        # Limites e marcações do eixo Y
         ax.set_ylim(0, 100)
         ax.yaxis.set_major_locator(mticker.MultipleLocator(10))
-        ax.set_title("MICROAMBIENTE DE EQUIPES - DIMENSÕES", fontsize=14, weight="bold")
+
+        # TÍTULO e SUBTÍTULO
+        fig.suptitle("MICROAMBIENTE DE EQUIPES - DIMENSÕES", fontsize=14, weight="bold", y=0.97)
+        ax.set_title("Autoavaliação do líder - Percentual por dimensão", fontsize=11)
+
+        # Ajuste de layout para não cortar os títulos
+        plt.tight_layout(rect=[0, 0, 1, 0.93])
+
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
