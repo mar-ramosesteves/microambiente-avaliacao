@@ -213,7 +213,7 @@ def grafico_autoavaliacao():
 
         # Carregar planilhas auxiliares (já devem estar no diretório)
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-        pontos_maximos = pd.read_excel("pontos_maximos_dimensao_microambiente.xlsx")
+        pontos_maximos = pd.read_excel("pontos_maximos_dimensao.xlsx")
 
         # Parse do JSON
         dados_json = json.load(arquivo)
@@ -357,7 +357,7 @@ def salvar_grafico_autoavaliacao():
             return jsonify({"erro": "Autoavaliação não encontrada."}), 404
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-        pontos_dim = pd.read_excel("pontos_maximos_dimensao_microambiente.xlsx")
+        pontos_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
 
         calculo = []
         for i in range(1, 49):
