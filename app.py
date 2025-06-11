@@ -273,7 +273,7 @@ def grafico_autoavaliacao():
         empresa = auto.get("empresa", "Empresa")
         emailLider = auto.get("emailLider", "email")
         codrodada = auto.get("codrodada", "")
-        numero_avaliacoes = len(auto.get("respostas", [])) // 96
+        # numero_avaliacoes = len(auto.get("respostas", [])) // 96
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         
         plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
@@ -410,22 +410,7 @@ def salvar_grafico_autoavaliacao():
 
 
 
-        
-        if auto.get("tipo") == "microambiente_equipe":
-            numero_avaliacoes = len(auto.get("avaliacoesEquipe", []))
-        else:
-            numero_avaliacoes = 1
-
-
-
-
-        numero_avaliacoes = 1 if "autoavaliacao" in auto else len(auto.get("avaliacoesEquipe", []))
-
-
-       
-
-
-
+         1
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
