@@ -340,7 +340,8 @@ def salvar_grafico_autoavaliacao():
         auto = None
         for arq in arquivos:
             nome = arq["name"].lower()
-            if "microambiente" in nome and "auto" in nome:
+            if "microambiente" in nome.lower() and "auto" in nome.lower():
+
                 req = service.files().get_media(fileId=arq["id"])
                 fh = io.BytesIO()
                 downloader = MediaIoBaseDownload(fh, req)
