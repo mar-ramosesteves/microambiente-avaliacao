@@ -273,6 +273,7 @@ def grafico_autoavaliacao():
         empresa = auto.get("empresa", "Empresa")
         emailLider = auto.get("emailLider", "email")
         codrodada = auto.get("codrodada", "")
+        numero_avaliacoes = len(auto.get("respostas", [])) // 96
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         
         plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
@@ -404,6 +405,11 @@ def salvar_grafico_autoavaliacao():
 
         # Ajuste de layout para não cortar os títulos
         plt.tight_layout(rect=[0, 0, 1, 0.93])
+
+        # Cálculo do número de avaliações baseado na quantidade de blocos de respostas
+numero_perguntas = 10  # ou o número real de perguntas por avaliação
+numero_avaliacoes = len(auto.get("dimensoes", [])) // numero_perguntas
+
 
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
