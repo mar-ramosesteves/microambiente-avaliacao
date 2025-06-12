@@ -1171,16 +1171,18 @@ from matplotlib.backends.backend_pdf import PdfPages
 def relatorio_analitico_microambiente():
     from flask import request, jsonify
     import pandas as pd
-    import matplotlib.pyplot as plt
-    import matplotlib.ticker as mticker
-    import seaborn as sns
     import json
     import io
     import os
+    import tempfile
+    from datetime import datetime
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import cm
+    from textwrap import wrap
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
-    from matplotlib.backends.backend_pdf import PdfPages
+    from googleapiclient.http import MediaIoBaseUpload
 
     if request.method == "OPTIONS":
         return '', 204
@@ -1210,9 +1212,6 @@ def relatorio_analitico_microambiente():
         id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
         id_rodada = buscar_id(codrodada.lower(), id_empresa)
         id_lider = buscar_id(emailLider.lower(), id_rodada)
-
-        if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
 
         arquivos = service.files().list(
             q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
@@ -1265,59 +1264,79 @@ def relatorio_analitico_microambiente():
                     "AFIRMACAO": row["AFIRMACAO"],
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "IDEAL": float(row["PONTUACAO_IDEAL"]),
-                    "REAL": float(row["PONTUACAO_REAL"]),
+                    "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
+                    "PONTUACAO_REAL": float(row["PONTUACAO_REAL"]),
                     "GAP": float(row["GAP"])
                 })
 
-        df = pd.DataFrame(registros)
-        df = df.sort_values(by=["DIMENSAO", "SUBDIMENSAO", "QUESTAO"])
+        nome_pdf = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
+        tmp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
+        c = canvas.Canvas(tmp_path, pagesize=A4)
+        width, height = A4
 
-        nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
-        caminho_local = f"/tmp/{nome_arquivo}"
+        # CAPA
+        c.setFont("Helvetica-Bold", 24)
+        c.drawCentredString(width / 2, height / 2 + 2*cm, "MICROAMBIENTE DE EQUIPES - ANÁLISE DE IMPACTOS")
+        c.setFont("Helvetica", 12)
+        c.drawCentredString(width / 2, height / 2, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
+        c.showPage()
 
-        with PdfPages(caminho_local) as pdf:
-            # CAPA
-            fig, ax = plt.subplots(figsize=(11.7, 8.3))
-            ax.axis("off")
-            ax.text(0.5, 0.6, "MICROAMBIENTE DE EQUIPES\nANÁLISE DE IMPACTOS", fontsize=22, ha="center", weight="bold")
-            ax.text(0.5, 0.4, f"{empresa} - {emailLider} - {codrodada} - {pd.Timestamp.now().strftime('%d/%m/%Y')}", ha="center", fontsize=12, color="gray")
-            pdf.savefig(fig)
-            plt.close()
+        y = height - 3 * cm
+        espacamento = 2.0 * cm
 
-            for (dim, subdim), grupo in df.groupby(["DIMENSAO", "SUBDIMENSAO"]):
-                fig, axs = plt.subplots(len(grupo), 1, figsize=(11.7, 2.2 * len(grupo)))
-                if len(grupo) == 1:
-                    axs = [axs]
+        registros.sort(key=lambda x: (x["DIMENSAO"], x["SUBDIMENSAO"]))
+        sub_atual = ""
 
-                fig.suptitle(f"QUESTÕES QUE IMPACTAM A SUBDIMENSÃO {subdim.upper()}\n(DIMENSÃO {dim.upper()})", fontsize=13, weight="bold", y=1.02)
+        for i, r in enumerate(registros):
+            if r["SUBDIMENSAO"] != sub_atual:
+                if i != 0:
+                    c.showPage()
+                    y = height - 3 * cm
+                sub_atual = r["SUBDIMENSAO"]
+                titulo = f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {r['SUBDIMENSAO'].upper()} ({r['DIMENSAO'].upper()})"
+                c.setFont("Helvetica-Bold", 11)
+                c.drawString(2 * cm, y, titulo)
+                y -= 1.2 * cm
 
-                for ax, (_, row) in zip(axs, grupo.iterrows()):
-                    ax.set_xlim(0, 100)
-                    ax.set_ylim(0, 1)
-                    ax.hlines(0.5, 0, 100, colors="#e0e0e0", linewidth=10)
+            c.setFont("Helvetica-Bold", 9)
+            linhas = wrap(f"{r['QUESTAO']}: {r['AFIRMACAO']}", 100)
+            for linha in linhas:
+                c.drawString(2 * cm, y, linha)
+                y -= 0.4 * cm
 
-                    cor = "red" if row["GAP"] > 20 else "green"
-                    ax.hlines(0.5, 0, row["GAP"], colors=cor, linewidth=10)
+            c.setFont("Helvetica", 8)
+            c.drawString(2 * cm, y, f"Como é: {r['PONTUACAO_REAL']}%   |   Como deveria ser: {r['PONTUACAO_IDEAL']}%")
+            y -= 0.4 * cm
 
-                    ax.set_xticks(range(0, 110, 10))
-                    ax.xaxis.set_major_formatter(mticker.PercentFormatter())
-                    ax.set_yticks([])
-                    ax.set_title(f"{row['QUESTAO']}. {row['AFIRMACAO']}", fontsize=10, loc="left")
-                    ax.text(0, 0.85, f"Como é: {row['REAL']}%   |   Como deveria ser: {row['IDEAL']}%", fontsize=9)
-                    ax.text(row["GAP"], 0.35, f"{row['GAP']:.1f}%", ha="center", fontsize=8, color="black")
+            # VELOCÍMETRO: GAP
+            largura_max = 12 * cm
+            altura = 0.2 * cm
+            cor = (1, 0, 0) if r['GAP'] <= -20 else (0.1, 0.5, 0.1)
+            largura = largura_max * abs(r['GAP']) / 100
+            x_barra = 2 * cm
 
-                fig.tight_layout(rect=[0, 0, 1, 0.95])
-                pdf.savefig(fig)
-                plt.close()
+            c.setFillColorRGB(*cor)
+            c.rect(x_barra, y, largura, altura, fill=True, stroke=False)
+            c.setFillColorRGB(0, 0, 0)
+            for i in range(0, 110, 10):
+                xi = x_barra + (largura_max * i / 100)
+                c.line(xi, y, xi, y + altura)
+                c.setFont("Helvetica", 5)
+                c.drawString(xi - 0.2 * cm, y - 0.3 * cm, f"{i}%")
 
-        file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
-        media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
+            y -= espacamento
+
+            if y < 5 * cm:
+                c.showPage()
+                y = height - 3 * cm
+
+        c.save()
+
+        file_metadata = {"name": nome_pdf, "parents": [id_lider]}
+        media = MediaIoBaseUpload(open(tmp_path, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_arquivo}"}), 200
+        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_pdf}"}), 200
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
-
-
