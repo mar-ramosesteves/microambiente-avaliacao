@@ -1284,29 +1284,34 @@ def relatorio_analitico_microambiente():
         pp.savefig(fig)
         plt.close()
 
-        # GERAÇÃO DOS GRÁFICOS
+                # GERAÇÃO DOS GRÁFICOS
         for (dim, sub), grupo in df.groupby(["DIMENSAO", "SUBDIMENSAO"]):
-            fig, axs = plt.subplots(2, 2, figsize=(8.27, 11.69))
-            fig.suptitle(f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {sub.upper()} ({dim.upper()})", fontsize=12, weight="bold")
-            axs = axs.flatten()
+            linhas = grupo.reset_index(drop=True)
+            total = len(linhas)
+            blocos = [linhas.iloc[i:i+4] for i in range(0, total, 4)]
 
-            for i, (_, linha) in enumerate(grupo.iterrows()):
-                ax = axs[i]
-                ax.set_xlim(0, 100)
-                ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
-                ax.axvline(linha["GAP"], color="red" if linha["GAP"] > 20 else "green", linewidth=4)
-                ax.set_yticks([])
-                ax.set_xticks(range(0, 101, 10))
-                ax.set_xlabel("GAP (%)", fontsize=8)
-                ax.set_title(f"{linha['QUESTAO']} - {linha['AFIRMACAO']}", fontsize=7, loc='left', pad=10)
-                ax.text(0.01, 1.1, f"Como é: {linha['PONTUACAO_REAL']:.1f}%   |   Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%",
-                        transform=ax.transAxes, fontsize=7, va='bottom')
+            for bloco in blocos:
+                fig, axs = plt.subplots(2, 2, figsize=(8.27, 11.69))
+                fig.suptitle(f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {sub.upper()} ({dim.upper()})", fontsize=12, weight="bold")
+                axs = axs.flatten()
 
-            for j in range(len(grupo), 4):
-                fig.delaxes(axs[j])
+                for i, (_, linha) in enumerate(bloco.iterrows()):
+                    ax = axs[i]
+                    ax.set_xlim(0, 100)
+                    ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
+                    ax.axvline(linha["GAP"], color="red" if linha["GAP"] > 20 else "green", linewidth=4)
+                    ax.set_yticks([])
+                    ax.set_xticks(range(0, 101, 10))
+                    ax.set_xlabel("GAP (%)", fontsize=8)
+                    ax.set_title(f"{linha['QUESTAO']} - {linha['AFIRMACAO']}", fontsize=7, loc='left', pad=10)
+                    ax.text(0.01, 1.1, f"Como é: {linha['PONTUACAO_REAL']:.1f}%   |   Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%",
+                            transform=ax.transAxes, fontsize=7, va='bottom')
 
-            pp.savefig(fig)
-            plt.close()
+                for j in range(len(bloco), 4):
+                    fig.delaxes(axs[j])
+
+                pp.savefig(fig)
+                plt.close()
 
         pp.close()
 
