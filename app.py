@@ -1024,7 +1024,7 @@ def relatorio_gaps_por_questao():
     from flask import request, jsonify
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseDownload
+    from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
     try:
         dados = request.get_json()
@@ -1106,7 +1106,7 @@ def relatorio_gaps_por_questao():
                 row = linha.iloc[0]
                 registros.append({
                     "QUESTAO": q,
-                    "TEXTO": row["TEXTO"],
+                    "AFIRMACAO": row["AFIRMACAO"],
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
                     "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
@@ -1123,7 +1123,7 @@ def relatorio_gaps_por_questao():
         df_sorted = df.sort_values("GAP")
         cores = df_sorted["GAP"].apply(lambda x: "red" if x < -20 else ("orange" if x < -10 else "blue"))
 
-        bars = ax.barh(df_sorted["TEXTO"], df_sorted["GAP"], color=cores)
+        bars = ax.barh(df_sorted["AFIRMACAO"], df_sorted["GAP"], color=cores)
 
         for i, (bar, gap) in enumerate(zip(bars, df_sorted["GAP"])):
             ax.text(bar.get_width() - 3, bar.get_y() + bar.get_height()/2, f'{gap:.1f}%', va='center', ha='right', fontsize=7, color="white")
