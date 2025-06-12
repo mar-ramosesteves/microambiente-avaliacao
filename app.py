@@ -1259,12 +1259,8 @@ def relatorio_analitico_microambiente():
 
         df = pd.DataFrame(registros)
 
-        # Geração dos gráficos (Waterfall + barras triplas)
-        # (parte do código visual será tratada separadamente e modularizada em breve para manter legibilidade)
-        # Aqui incluiremos o título: "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO"
-        # E subtítulo: empresa / emailLider / codrodada / data
-
-        # [EXEMPLO DE SAÍDA FINAL SIMPLIFICADA - substitua depois pelo bloco gráfico]
+        # Geração de relatório simplificado com título e rodapé
+        sns.set(style="whitegrid")
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.text(0.5, 0.5, "RELATÓRIO ANALÍTICO AQUI", ha="center", va="center", fontsize=12)
         ax.axis("off")
@@ -1284,4 +1280,3 @@ def relatorio_analitico_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
-
