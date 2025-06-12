@@ -1169,6 +1169,19 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
+    from flask import request, jsonify
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
+    import seaborn as sns
+    import json
+    import io
+    import os
+    from matplotlib.backends.backend_pdf import PdfPages
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+
     if request.method == "OPTIONS":
         return '', 204
 
@@ -1181,6 +1194,7 @@ def relatorio_analitico_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
+        # GOOGLE DRIVE
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1226,6 +1240,7 @@ def relatorio_analitico_microambiente():
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
 
+        # Calcular médias por questão
         somas = {}
         for av in dados_equipes:
             for i in range(1, 49):
@@ -1253,44 +1268,45 @@ def relatorio_analitico_microambiente():
                     "AFIRMACAO": row["AFIRMACAO"],
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
-                    "PONTUACAO_REAL": float(row["PONTUACAO_REAL"]),
+                    "IDEAL": float(row["PONTUACAO_IDEAL"]),
+                    "REAL": float(row["PONTUACAO_REAL"]),
                     "GAP": float(row["GAP"])
                 })
 
         df = pd.DataFrame(registros)
+        df.sort_values(by=["DIMENSAO", "SUBDIMENSAO"], inplace=True)
 
         nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
 
         with PdfPages(caminho_local) as pdf:
-            for sub in df['SUBDIMENSAO'].unique():
-                bloco = df[df['SUBDIMENSAO'] == sub]
-                fig, axs = plt.subplots(2, 1, figsize=(10, 9))
+            for subdim, grupo in df.groupby("SUBDIMENSAO"):
+                fig, axs = plt.subplots(2, 2, figsize=(11.69, 8.27))  # A4 paisagem
+                axs = axs.flatten()
+                fig.suptitle(f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {subdim}", fontsize=14, weight="bold")
 
-                # Gráfico 1 - Como é vs Como deveria ser
-                axs[0].bar(bloco['QUESTAO'], bloco['PONTUACAO_REAL'], label="Como é")
-                axs[0].bar(bloco['QUESTAO'], bloco['PONTUACAO_IDEAL'], alpha=0.5, label="Como deveria ser")
-                axs[0].set_ylim(0, 100)
-                axs[0].set_title(f"{sub}", fontsize=12, weight="bold")
-                axs[0].legend()
-                for i, row in bloco.iterrows():
-                    axs[0].text(row['QUESTAO'], row['PONTUACAO_REAL'] + 1, f"{row['PONTUACAO_REAL']}%", ha='center', fontsize=6)
+                for i, (_, row) in enumerate(grupo.iterrows()):
+                    if i >= 4:
+                        break
+                    ax = axs[i]
+                    ideal = row["IDEAL"]
+                    real = row["REAL"]
+                    gap = row["GAP"]
+                    bars = ax.barh(["Ideal", "Real"], [ideal, real], color=["darkorange", "navy"])
+                    ax.barh(["GAP"], [abs(gap)], color="red" if gap < -20 else "green")
+                    ax.set_xlim(0, 100)
+                    ax.set_xticks(range(0, 110, 10))
+                    ax.set_title(row["AFIRMACAO"], fontsize=9)
+                    ax.grid(True, axis='x', linestyle='--', linewidth=0.5)
 
-                # Gráfico 2 - GAP
-                sns.barplot(x='QUESTAO', y='GAP', data=bloco, ax=axs[1], palette='coolwarm')
-                axs[1].set_ylim(-100, 0)
-                axs[1].set_ylabel("GAP (%)")
-                axs[1].set_title("GAP por Questão")
-                axs[1].yaxis.set_major_locator(mticker.MultipleLocator(10))
-                for bar, val in zip(axs[1].patches, bloco['GAP']):
-                    axs[1].text(bar.get_x() + bar.get_width()/2, val - 3, f"{val:.1f}%", ha='center', fontsize=6)
+                for j in range(i + 1, 4):
+                    fig.delaxes(axs[j])
 
                 fig.text(0.01, 0.01, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
-                plt.tight_layout()
                 pdf.savefig(fig)
                 plt.close(fig)
 
+        # Upload
         file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
@@ -1299,4 +1315,5 @@ def relatorio_analitico_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
 
