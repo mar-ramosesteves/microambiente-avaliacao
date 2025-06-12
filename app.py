@@ -1302,6 +1302,8 @@ def relatorio_analitico_microambiente():
 
             c.showPage()
 
+        c.save()
+        
         file_metadata = {"name": nome_pdf, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
