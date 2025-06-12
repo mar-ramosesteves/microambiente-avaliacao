@@ -1154,6 +1154,8 @@ def relatorio_gaps_por_questao():
 
 # Código Python completo para gerar o relatório analítico conforme layout aprovado
 
+# Versão ajustada e finalizada da sua rota Flask para gerar o relatório analítico de microambiente em PDF e salvar no Google Drive
+
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
     from flask import request, jsonify
@@ -1169,6 +1171,9 @@ def relatorio_analitico_microambiente():
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
 
     if request.method == "OPTIONS":
         return '', 204
@@ -1260,28 +1265,24 @@ def relatorio_analitico_microambiente():
 
         df = pd.DataFrame(registros)
 
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.units import cm
-
         nome_pdf = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
         c.setFont("Helvetica-Bold", 22)
-        c.drawCentredString(width / 2, height / 2 + 2 * cm, "MICROAMBIENTE DE EQUIPES - ANÁLISE DE IMPACTOS")
+        c.drawCentredString(width / 2, height / 2 + 2 * cm, "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO")
         c.setFont("Helvetica", 12)
-        c.drawCentredString(width / 2, height / 2, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
+        c.drawCentredString(width / 2, height / 2, f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}")
         c.showPage()
 
         for _, linha in df.iterrows():
             c.setFont("Helvetica-Bold", 11)
-            titulo = f"QUESTÕES QUE IMPACTAM A SUBDIMENSÃO {linha['SUBDIMENSAO'].upper()} (DIMENSÃO {linha['DIMENSAO'].upper()})"
+            titulo = f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {linha['SUBDIMENSAO'].upper()}"
             c.drawString(2 * cm, height - 2 * cm, titulo[:100])
             c.setFont("Helvetica", 10)
             c.drawString(2 * cm, height - 3.2 * cm, f"{linha['QUESTAO']}: {linha['AFIRMACAO'][:100]}")
-            c.drawString(2 * cm, height - 4 * cm, f"Como é: {linha['PONTUACAO_REAL']}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']}%")
+            c.drawString(2 * cm, height - 4 * cm, f"Como é: {linha['PONTUACAO_REAL']:.1f}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%")
 
             x = 2 * cm
             y = height - 5 * cm
@@ -1303,7 +1304,7 @@ def relatorio_analitico_microambiente():
             c.showPage()
 
         c.save()
-        
+
         file_metadata = {"name": nome_pdf, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
