@@ -11,7 +11,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins=["https://gestor.thehrkey.tech"])
+
 
 @app.after_request
 def aplicar_cors(response):
