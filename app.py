@@ -854,54 +854,78 @@ def salvar_grafico_media_equipe_subdimensao():
 @app.route("/grafico-waterfall-gaps", methods=["POST"])
 def grafico_waterfall_gaps():
     import pandas as pd
-    import json
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
     import seaborn as sns
-    import io
-    import os
+    import json, io, os
     from flask import request, jsonify
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+    from google.oauth2 import service_account
 
     try:
-        # Pega os dados do formulário
+        # --- REQUISIÇÃO E VALIDAÇÃO ---
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
         emailLider = dados.get("emailLider")
 
-
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # Caminhos dos arquivos
-        matriz_path = "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx"
-        pasta = f"{empresa.lower()}/{codrodada.lower()}/{emailLider.lower()}"
-        json_path = None
+        # --- CREDENCIAIS E DRIVE ---
+        SCOPES = ['https://www.googleapis.com/auth/drive']
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
+            scopes=SCOPES
+        )
+        service = build('drive', 'v3', credentials=creds)
+        PASTA_RAIZ = "1l4kOZwed-Yc5nHU4RBTmWQz3zYAlpniS"
 
-        for nome_arquivo in os.listdir(pasta):
-            if nome_arquivo.startswith("relatorio_microambiente") and nome_arquivo.endswith(".json"):
-                json_path = os.path.join(pasta, nome_arquivo)
-                break
+        def buscar_id(nome, pai):
+            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
+            return resp[0]["id"] if resp else None
 
-        if not json_path or not os.path.isfile(json_path):
-            return jsonify({"erro": "Arquivo JSON não encontrado."}), 404
+        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
+        id_rodada = buscar_id(codrodada.lower(), id_empresa)
+        id_lider = buscar_id(emailLider.lower(), id_rodada)
 
-        # Carregar matriz
-        matriz = pd.read_excel(matriz_path)
+        if not id_lider:
+            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
 
-        # Carregar JSON
-        with open(json_path, "r", encoding="utf-8") as f:
-            dados_json = json.load(f)
+        arquivos = service.files().list(
+            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
+            fields="files(id, name)").execute().get("files", [])
 
-        avaliacoes = dados_json.get("avaliacoesEquipe", [])
-        num_avaliacoes = len(avaliacoes)
+        # --- LOCALIZAR JSON VÁLIDO ---
+        dados_equipes = []
+        for arq in arquivos:
+            nome = arq["name"]
+            if "microambiente" in nome and emailLider in nome and codrodada in nome:
+                req = service.files().get_media(fileId=arq["id"])
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, req)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                fh.seek(0)
+                conteudo = json.load(fh)
+                for bloco in conteudo.get("avaliacoesEquipe", []):
+                    if bloco.get("tipo") == "microambiente_equipe":
+                        dados_equipes.append(bloco)
 
-        if num_avaliacoes == 0:
-            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+        if not dados_equipes:
+            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 400
 
-        # Calcular médias arredondadas por questão
+        num_avaliacoes = len(dados_equipes)
+
+        # --- CARREGAR MATRIZ ---
+        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+
+        # --- CÁLCULO DE MÉDIAS POR QUESTÃO ---
         somas = {}
-        for av in avaliacoes:
+        for av in dados_equipes:
             for i in range(1, 49):
                 q = f"Q{i:02d}"
                 ideal = int(av.get(f"{q}k", 0))
@@ -911,7 +935,6 @@ def grafico_waterfall_gaps():
                 somas[q]["ideal"] += ideal
                 somas[q]["real"] += real
 
-        # Construir DataFrame com os GAPs válidos cruzando com a matriz
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
@@ -928,17 +951,17 @@ def grafico_waterfall_gaps():
                     "GAP": row["GAP"]
                 })
 
-        # Gerar DataFrame base
         base = pd.DataFrame(registros)
-
-        # Agrupar GAPs
         gap_dim = base.groupby("DIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
         gap_subdim = base.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
 
-        # Plot
+        # --- PLOTAGEM ---
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import matplotlib.ticker as mticker
+
         fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 10))
 
-        # Gráfico por Dimensão
         sns.barplot(x="DIMENSAO", y="GAP", data=gap_dim, palette="coolwarm", ax=ax1)
         ax1.set_title("Waterfall - GAP por Dimensão (Média da Equipe)", fontsize=14)
         ax1.set_ylabel("GAP Médio (%)")
@@ -950,7 +973,6 @@ def grafico_waterfall_gaps():
             ax1.annotate(f'{height:.1f}%', (bar.get_x() + bar.get_width() / 2, height - 4),
                          ha='center', fontsize=8)
 
-        # Gráfico por Subdimensão
         sns.barplot(x="SUBDIMENSAO", y="GAP", data=gap_subdim, palette="viridis", ax=ax2)
         ax2.set_title("Waterfall - GAP por Subdimensão (Média da Equipe)", fontsize=14)
         ax2.set_ylabel("GAP Médio (%)")
@@ -963,14 +985,23 @@ def grafico_waterfall_gaps():
                          ha='center', fontsize=7)
 
         plt.tight_layout()
-
         nome_arquivo = f"waterfall_gaps_{emailLider}_{codrodada}.pdf"
-        plt.savefig(nome_arquivo)
+        caminho_local = f"/tmp/{nome_arquivo}"
+        plt.savefig(caminho_local)
 
-        return jsonify({"mensagem": f"✅ Gráfico salvo como {nome_arquivo}"}), 200
+        # --- UPLOAD PARA O DRIVE ---
+        media = MediaIoBaseUpload(io.BytesIO(open(caminho_local, "rb").read()), mimetype="application/pdf")
+        service.files().create(
+            body={"name": nome_arquivo, "parents": [id_lider]},
+            media_body=media,
+            fields="id"
+        ).execute()
+
+        return jsonify({"mensagem": f"✅ Gráfico salvo no Drive: {nome_arquivo}"}), 200
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
 
 
 
