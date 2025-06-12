@@ -989,6 +989,12 @@ def grafico_waterfall_gaps():
         caminho_local = f"/tmp/{nome_arquivo}"
         plt.savefig(caminho_local)
 
+        # Inserir rodapé com informações do relatório
+        fig.text(0.5, 0.01, 
+                 f"{empresa} - {emailLider} - {codrodada} - {pd.Timestamp.now().strftime('%d/%m/%Y')}", 
+                 ha='center', va='bottom', fontsize=8, color='gray', style='italic')
+
+
         # --- UPLOAD PARA O DRIVE ---
         media = MediaIoBaseUpload(io.BytesIO(open(caminho_local, "rb").read()), mimetype="application/pdf")
         service.files().create(
