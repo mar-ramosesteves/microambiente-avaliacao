@@ -1012,5 +1012,115 @@ def grafico_waterfall_gaps():
 
 
 
+import pandas as pd
+import json
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import seaborn as sns
+import os
+from datetime import datetime
+
+# --- CONFIGURAÇÃO ---
+json_path = "relatorio_microambiente_felipe@fastco.pro_av1001_20250611_035537 (1).json"
+matriz_path = "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx"
+
+# --- CARREGAMENTO DOS DADOS ---
+with open(json_path, "r", encoding="utf-8") as f:
+    dados_json = json.load(f)
+matriz = pd.read_excel(matriz_path)
+
+empresa = dados_json.get("empresa", "EMPRESA")
+emailLider = dados_json.get("emailLider", "EMAIL")
+codrodada = dados_json.get("codrodada", "RODADA")
+data = datetime.now().strftime("%d/%m/%Y")
+
+avaliacoes = dados_json.get("avaliacoesEquipe", [])
+num_avaliacoes = len(avaliacoes)
+
+# --- CÁLCULO DAS MÉDIAS ---
+somas = {}
+for av in avaliacoes:
+    for i in range(1, 49):
+        q = f"Q{i:02d}"
+        ideal = int(av.get(f"{q}k", 0))
+        real = int(av.get(f"{q}C", 0))
+        if q not in somas:
+            somas[q] = {"ideal": 0, "real": 0}
+        somas[q]["ideal"] += ideal
+        somas[q]["real"] += real
+
+registros = []
+for i in range(1, 49):
+    q = f"Q{i:02d}"
+    media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
+    media_real = round(somas[q]["real"] / num_avaliacoes)
+    chave = f"{q}_I{media_ideal}_R{media_real}"
+    linha = matriz[matriz["CHAVE"] == chave]
+    if not linha.empty:
+        row = linha.iloc[0]
+        registros.append({
+            "QUESTAO": q,
+            "TEXTO": row["TEXTO"],
+            "DIMENSAO": row["DIMENSAO"],
+            "SUBDIMENSAO": row["SUBDIMENSAO"],
+            "IDEAL": row["PONTUACAO_IDEAL"],
+            "REAL": row["PONTUACAO_REAL"],
+            "GAP": row["GAP"]
+        })
+
+base = pd.DataFrame(registros)
+subdimensoes = base["SUBDIMENSAO"].unique()
+
+from matplotlib.backends.backend_pdf import PdfPages
+
+pdf_path = "relatorio_analitico_microambiente.pdf"
+with PdfPages(pdf_path) as pdf:
+    # Página de Título
+    plt.figure(figsize=(11.7, 8.3))
+    plt.text(0.5, 0.7, "ANÁLISE DE MICROAMBIENTE\nOPORTUNIDADES DE DESENVOLVIMENTO", ha='center', fontsize=20, weight="bold")
+    plt.text(0.5, 0.5, f"{empresa} / {emailLider} / {codrodada} / {data}", ha='center', fontsize=12, style='italic')
+    plt.axis("off")
+    pdf.savefig()
+    plt.close()
+
+    for subdim in subdimensoes:
+        dados_sub = base[base["SUBDIMENSAO"] == subdim]
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 9))
+        fig.subplots_adjust(hspace=0.5)
+
+        # Gráfico GAP
+        sns.barplot(x="GAP", y="TEXTO", data=dados_sub.sort_values("GAP"), palette="coolwarm", ax=ax1)
+        ax1.set_title(f"GAP por Questão - {subdim}", fontsize=14, weight="bold")
+        ax1.set_xlim(-100, 0)
+        ax1.xaxis.set_major_locator(mticker.MultipleLocator(10))
+        for i, v in enumerate(dados_sub.sort_values("GAP")["GAP"]):
+            ax1.text(v + 2, i, f"{v:.1f}%", va='center', fontsize=8)
+
+        # Gráfico Como é / Como deveria ser / GAP
+        bar_width = 0.25
+        x = range(len(dados_sub))
+        ax2.bar([p - bar_width for p in x], dados_sub["REAL"], width=bar_width, label="Como é")
+        ax2.bar(x, dados_sub["IDEAL"], width=bar_width, label="Como deveria ser")
+        ax2.bar([p + bar_width for p in x], dados_sub["GAP"], width=bar_width, label="GAP")
+
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(dados_sub["QUESTAO"], rotation=90)
+        ax2.set_ylim(-100, 100)
+        ax2.yaxis.set_major_locator(mticker.MultipleLocator(10))
+        ax2.set_title("Comparativo por Questão", fontsize=12)
+        ax2.legend()
+
+        # Rodapé
+        fig.text(0.01, 0.01, f"{empresa} - {emailLider} - {codrodada} - {data}", ha='left', fontsize=8, color='gray', style='italic')
+
+        pdf.savefig()
+        plt.close()
+
+print(f"Relatório gerado: {pdf_path}")
+
+
+
+
 
 
