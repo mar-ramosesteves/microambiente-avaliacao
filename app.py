@@ -1154,7 +1154,7 @@ def relatorio_gaps_por_questao():
 
 # Código Python completo para gerar o relatório analítico conforme layout aprovado
 
-# Versão ajustada e finalizada da sua rota Flask para gerar o relatório analítico de microambiente em PDF e salvar no Google Drive
+# Versão finalizada da rota Flask `/relatorio-analitico-microambiente` com layout validado: múltiplas questões por página agrupadas por subdimensão, barras de GAP, escala e legendas
 
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
@@ -1270,41 +1270,45 @@ def relatorio_analitico_microambiente():
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
+        # Capa
         c.setFont("Helvetica-Bold", 22)
         c.drawCentredString(width / 2, height / 2 + 2 * cm, "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO")
         c.setFont("Helvetica", 12)
         c.drawCentredString(width / 2, height / 2, f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}")
         c.showPage()
 
-        for _, linha in df.iterrows():
-            c.setFont("Helvetica-Bold", 11)
-            titulo = f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {linha['SUBDIMENSAO'].upper()}"
-            c.drawString(2 * cm, height - 2 * cm, titulo[:100])
-            c.setFont("Helvetica", 10)
-            c.drawString(2 * cm, height - 3.2 * cm, f"{linha['QUESTAO']}: {linha['AFIRMACAO'][:100]}")
-            c.drawString(2 * cm, height - 4 * cm, f"Como é: {linha['PONTUACAO_REAL']:.1f}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%")
-
-            x = 2 * cm
-            y = height - 5 * cm
-            largura = 16 * cm
-            altura = 0.3 * cm
-            gap = linha['GAP']
-            cor = (1, 0, 0) if gap > 20 else (0, 0.6, 0.2)
-
-            c.setFillColorRGB(*cor)
-            c.rect(x, y, largura * gap / 100, altura, fill=1, stroke=0)
-
-            for i in range(0, 110, 10):
-                xi = x + (largura * i / 100)
-                c.line(xi, y, xi, y + altura)
-                c.setFont("Helvetica", 6)
-                c.setFillColorRGB(0, 0, 0)
-                c.drawString(xi - 0.3 * cm, y - 0.4 * cm, f"{i}%")
-
-            c.showPage()
+        # Quebra por subdimensão com até 4 questões por página
+        agrupado = df.groupby("SUBDIMENSAO")
+        for sub, grupo in agrupado:
+            grupo = grupo.reset_index(drop=True)
+            for i in range(0, len(grupo), 4):
+                subset = grupo.iloc[i:i+4]
+                c.setFont("Helvetica-Bold", 13)
+                c.drawCentredString(width / 2, height - 2 * cm, f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {sub.upper()}")
+                y_base = height - 3 * cm
+                for j, linha in subset.iterrows():
+                    y = y_base - (j % 4) * 5 * cm
+                    c.setFont("Helvetica-Bold", 10)
+                    c.drawString(2 * cm, y, f"{linha['QUESTAO']}: {linha['AFIRMACAO'][:90]}")
+                    c.setFont("Helvetica", 9)
+                    c.drawString(2 * cm, y - 0.5 * cm, f"Como é: {linha['PONTUACAO_REAL']:.1f}% | Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}% | GAP: {linha['GAP']:.1f}%")
+                    x_barra = 2 * cm
+                    y_barra = y - 1.3 * cm
+                    largura = 16 * cm
+                    altura = 0.4 * cm
+                    cor = (1, 0, 0) if linha['GAP'] > 20 else (0, 0.6, 0.2)
+                    c.setFillColorRGB(*cor)
+                    c.rect(x_barra, y_barra, largura * linha['GAP'] / 100, altura, fill=1, stroke=0)
+                    for marca in range(0, 110, 10):
+                        xi = x_barra + (largura * marca / 100)
+                        c.setStrokeGray(0.5)
+                        c.line(xi, y_barra, xi, y_barra + altura)
+                        c.setFont("Helvetica", 6)
+                        c.setFillColorRGB(0, 0, 0)
+                        c.drawString(xi - 0.3 * cm, y_barra - 0.3 * cm, f"{marca}%")
+                c.showPage()
 
         c.save()
-
         file_metadata = {"name": nome_pdf, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
