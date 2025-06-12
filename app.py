@@ -1159,14 +1159,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
-from matplotlib.backends.backend_pdf import PdfPages
-
 import json
 import io
 import os
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+from matplotlib.backends.backend_pdf import PdfPages
 
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
@@ -1198,6 +1197,7 @@ def relatorio_analitico_microambiente():
         id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
         id_rodada = buscar_id(codrodada.lower(), id_empresa)
         id_lider = buscar_id(emailLider.lower(), id_rodada)
+
         if not id_lider:
             return jsonify({"erro": "Pasta do líder não encontrada."}), 404
 
@@ -1239,6 +1239,7 @@ def relatorio_analitico_microambiente():
 
         num_avaliacoes = len(dados_equipes)
         registros = []
+
         for i in range(1, 49):
             q = f"Q{i:02d}"
             media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
@@ -1258,40 +1259,35 @@ def relatorio_analitico_microambiente():
                 })
 
         df = pd.DataFrame(registros)
-        sns.set(style="whitegrid")
-        total_paginas = 0
+
         nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
+
         with PdfPages(caminho_local) as pdf:
-            for subdim, grupo in df.groupby("SUBDIMENSAO"):
-                fig, axes = plt.subplots(2, 1, figsize=(11, 8))
+            for sub in df['SUBDIMENSAO'].unique():
+                bloco = df[df['SUBDIMENSAO'] == sub]
+                fig, axs = plt.subplots(2, 1, figsize=(10, 9))
 
-                # GAP por Questao (waterfall horizontal por questao)
-                df_sorted = grupo.sort_values("GAP")
-                cores = df_sorted["GAP"].apply(lambda x: "red" if x < -20 else ("orange" if x < -10 else "blue"))
-                ax1 = axes[0]
-                ax1.bar(df_sorted["QUESTAO"], df_sorted["GAP"], color=cores)
-                ax1.set_title(f"GAP por Questão - {subdim}", fontsize=10, weight="bold")
-                ax1.set_ylabel("GAP (%)")
-                ax1.set_ylim(0, 100)
-                ax1.yaxis.set_major_locator(mticker.MultipleLocator(10))
+                # Gráfico 1 - Como é vs Como deveria ser
+                axs[0].bar(bloco['QUESTAO'], bloco['PONTUACAO_REAL'], label="Como é")
+                axs[0].bar(bloco['QUESTAO'], bloco['PONTUACAO_IDEAL'], alpha=0.5, label="Como deveria ser")
+                axs[0].set_ylim(0, 100)
+                axs[0].set_title(f"{sub}", fontsize=12, weight="bold")
+                axs[0].legend()
+                for i, row in bloco.iterrows():
+                    axs[0].text(row['QUESTAO'], row['PONTUACAO_REAL'] + 1, f"{row['PONTUACAO_REAL']}%", ha='center', fontsize=6)
 
-                # Mini Gráfico: Barras triplas
-                ax2 = axes[1]
-                largura = 0.25
-                pos = range(len(grupo))
-                ax2.bar([p - largura for p in pos], grupo["PONTUACAO_REAL"], width=largura, label="Como é")
-                ax2.bar(pos, grupo["PONTUACAO_IDEAL"], width=largura, label="Como deveria ser")
-                ax2.bar([p + largura for p in pos], grupo["GAP"], width=largura, label="GAP")
-                ax2.set_xticks(pos)
-                ax2.set_xticklabels(grupo["QUESTAO"])
-                ax2.set_ylim(0, 100)
-                ax2.set_title(f"Mini Gráfico - Subdimensão: {subdim}", fontsize=10)
-                ax2.legend()
+                # Gráfico 2 - GAP
+                sns.barplot(x='QUESTAO', y='GAP', data=bloco, ax=axs[1], palette='coolwarm')
+                axs[1].set_ylim(-100, 0)
+                axs[1].set_ylabel("GAP (%)")
+                axs[1].set_title("GAP por Questão")
+                axs[1].yaxis.set_major_locator(mticker.MultipleLocator(10))
+                for bar, val in zip(axs[1].patches, bloco['GAP']):
+                    axs[1].text(bar.get_x() + bar.get_width()/2, val - 3, f"{val:.1f}%", ha='center', fontsize=6)
 
-                fig.text(0.5, 0.95, "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO", ha='center', fontsize=12, weight='bold')
-                fig.text(0.5, 0.02, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", ha="center", fontsize=8, color="gray")
-                plt.tight_layout(rect=[0, 0.03, 1, 0.92])
+                fig.text(0.01, 0.01, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
+                plt.tight_layout()
                 pdf.savefig(fig)
                 plt.close(fig)
 
