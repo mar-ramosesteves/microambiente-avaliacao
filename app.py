@@ -851,4 +851,125 @@ def salvar_grafico_media_equipe_subdimensao():
         return jsonify({"erro": str(e)}), 500
 
 
+@app.route("/grafico-waterfall-gaps", methods=["POST"])
+def grafico_waterfall_gaps():
+    import pandas as pd
+    import json
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
+    import seaborn as sns
+    import io
+    import os
+    from flask import request, jsonify
+
+    try:
+        # Pega os dados do formulário
+        empresa = request.form.get("empresa")
+        codrodada = request.form.get("codrodada")
+        emailLider = request.form.get("emailLider")
+
+        if not all([empresa, codrodada, emailLider]):
+            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+
+        # Caminhos dos arquivos
+        matriz_path = "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx"
+        pasta = f"{empresa.lower()}/{codrodada.lower()}/{emailLider.lower()}"
+        json_path = None
+
+        for nome_arquivo in os.listdir(pasta):
+            if nome_arquivo.startswith("relatorio_microambiente") and nome_arquivo.endswith(".json"):
+                json_path = os.path.join(pasta, nome_arquivo)
+                break
+
+        if not json_path or not os.path.isfile(json_path):
+            return jsonify({"erro": "Arquivo JSON não encontrado."}), 404
+
+        # Carregar matriz
+        matriz = pd.read_excel(matriz_path)
+
+        # Carregar JSON
+        with open(json_path, "r", encoding="utf-8") as f:
+            dados_json = json.load(f)
+
+        avaliacoes = dados_json.get("avaliacoesEquipe", [])
+        num_avaliacoes = len(avaliacoes)
+
+        if num_avaliacoes == 0:
+            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+
+        # Calcular médias arredondadas por questão
+        somas = {}
+        for av in avaliacoes:
+            for i in range(1, 49):
+                q = f"Q{i:02d}"
+                ideal = int(av.get(f"{q}k", 0))
+                real = int(av.get(f"{q}C", 0))
+                if q not in somas:
+                    somas[q] = {"ideal": 0, "real": 0}
+                somas[q]["ideal"] += ideal
+                somas[q]["real"] += real
+
+        # Construir DataFrame com os GAPs válidos cruzando com a matriz
+        registros = []
+        for i in range(1, 49):
+            q = f"Q{i:02d}"
+            media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
+            media_real = round(somas[q]["real"] / num_avaliacoes)
+            chave = f"{q}_I{media_ideal}_R{media_real}"
+            linha = matriz[matriz["CHAVE"] == chave]
+            if not linha.empty:
+                row = linha.iloc[0]
+                registros.append({
+                    "QUESTAO": q,
+                    "DIMENSAO": row["DIMENSAO"],
+                    "SUBDIMENSAO": row["SUBDIMENSAO"],
+                    "GAP": row["GAP"]
+                })
+
+        # Gerar DataFrame base
+        base = pd.DataFrame(registros)
+
+        # Agrupar GAPs
+        gap_dim = base.groupby("DIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
+        gap_subdim = base.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
+
+        # Plot
+        fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 10))
+
+        # Gráfico por Dimensão
+        sns.barplot(x="DIMENSAO", y="GAP", data=gap_dim, palette="coolwarm", ax=ax1)
+        ax1.set_title("Waterfall - GAP por Dimensão (Média da Equipe)", fontsize=14)
+        ax1.set_ylabel("GAP Médio (%)")
+        ax1.set_ylim(-100, 0)
+        ax1.yaxis.set_major_locator(mticker.MultipleLocator(10))
+        ax1.tick_params(axis='x', rotation=45)
+        for bar in ax1.patches:
+            height = bar.get_height()
+            ax1.annotate(f'{height:.1f}%', (bar.get_x() + bar.get_width() / 2, height - 4),
+                         ha='center', fontsize=8)
+
+        # Gráfico por Subdimensão
+        sns.barplot(x="SUBDIMENSAO", y="GAP", data=gap_subdim, palette="viridis", ax=ax2)
+        ax2.set_title("Waterfall - GAP por Subdimensão (Média da Equipe)", fontsize=14)
+        ax2.set_ylabel("GAP Médio (%)")
+        ax2.set_ylim(-100, 0)
+        ax2.yaxis.set_major_locator(mticker.MultipleLocator(10))
+        ax2.tick_params(axis='x', rotation=90)
+        for bar in ax2.patches:
+            height = bar.get_height()
+            ax2.annotate(f'{height:.1f}%', (bar.get_x() + bar.get_width() / 2, height - 4),
+                         ha='center', fontsize=7)
+
+        plt.tight_layout()
+
+        nome_arquivo = f"waterfall_gaps_{emailLider}_{codrodada}.pdf"
+        plt.savefig(nome_arquivo)
+
+        return jsonify({"mensagem": f"✅ Gráfico salvo como {nome_arquivo}"}), 200
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
+
 
