@@ -1150,3 +1150,138 @@ def relatorio_gaps_por_questao():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
+def relatorio_analitico_microambiente():
+    from flask import request, jsonify
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
+    import seaborn as sns
+    import json
+    import io
+    import os
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+
+    if request.method == "OPTIONS":
+        return '', 204
+
+    try:
+        dados = request.get_json()
+        empresa = dados.get("empresa")
+        codrodada = dados.get("codrodada")
+        emailLider = dados.get("emailLider")
+
+        if not all([empresa, codrodada, emailLider]):
+            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+
+        # GOOGLE DRIVE
+        SCOPES = ['https://www.googleapis.com/auth/drive']
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
+            scopes=SCOPES
+        )
+        service = build('drive', 'v3', credentials=creds)
+        PASTA_RAIZ = "1l4kOZwed-Yc5nHU4RBTmWQz3zYAlpniS"
+
+        def buscar_id(nome, pai):
+            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
+            return resp[0]["id"] if resp else None
+
+        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
+        id_rodada = buscar_id(codrodada.lower(), id_empresa)
+        id_lider = buscar_id(emailLider.lower(), id_rodada)
+
+        if not id_lider:
+            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+
+        arquivos = service.files().list(
+            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
+            fields="files(id, name)").execute().get("files", [])
+
+        dados_equipes = []
+        for arq in arquivos:
+            nome = arq["name"]
+            if "microambiente" in nome and emailLider in nome and codrodada in nome:
+                req = service.files().get_media(fileId=arq["id"])
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, req)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                fh.seek(0)
+                conteudo = json.load(fh)
+                for bloco in conteudo.get("avaliacoesEquipe", []):
+                    if bloco.get("tipo") == "microambiente_equipe":
+                        dados_equipes.append(bloco)
+
+        if not dados_equipes:
+            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+
+        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+
+        # Calcular médias por questão
+        somas = {}
+        for av in dados_equipes:
+            for i in range(1, 49):
+                q = f"Q{i:02d}"
+                ideal = int(av.get(f"{q}k", 0))
+                real = int(av.get(f"{q}C", 0))
+                if q not in somas:
+                    somas[q] = {"ideal": 0, "real": 0}
+                somas[q]["ideal"] += ideal
+                somas[q]["real"] += real
+
+        num_avaliacoes = len(dados_equipes)
+        registros = []
+
+        for i in range(1, 49):
+            q = f"Q{i:02d}"
+            media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
+            media_real = round(somas[q]["real"] / num_avaliacoes)
+            chave = f"{q}_I{media_ideal}_R{media_real}"
+            linha = matriz[matriz["CHAVE"] == chave]
+            if not linha.empty:
+                row = linha.iloc[0]
+                registros.append({
+                    "QUESTAO": q,
+                    "TEXTO": row["TEXTO"],
+                    "DIMENSAO": row["DIMENSAO"],
+                    "SUBDIMENSAO": row["SUBDIMENSAO"],
+                    "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
+                    "PONTUACAO_REAL": float(row["PONTUACAO_REAL"]),
+                    "GAP": float(row["GAP"])
+                })
+
+        df = pd.DataFrame(registros)
+
+        # Geração dos gráficos (Waterfall + barras triplas)
+        # (parte do código visual será tratada separadamente e modularizada em breve para manter legibilidade)
+        # Aqui incluiremos o título: "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO"
+        # E subtítulo: empresa / emailLider / codrodada / data
+
+        # [EXEMPLO DE SAÍDA FINAL SIMPLIFICADA - substitua depois pelo bloco gráfico]
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.text(0.5, 0.5, "RELATÓRIO ANALÍTICO AQUI", ha="center", va="center", fontsize=12)
+        ax.axis("off")
+
+        fig.text(0.01, 0.01, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
+
+        nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
+        caminho_local = f"/tmp/{nome_arquivo}"
+        plt.savefig(caminho_local)
+
+        # Upload
+        file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
+        media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
+        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_arquivo}"}), 200
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
