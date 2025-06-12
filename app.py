@@ -1259,19 +1259,38 @@ def relatorio_analitico_microambiente():
 
         df = pd.DataFrame(registros)
 
-        # Geração de relatório simplificado com título e rodapé
+        # === GRÁFICO ANALÍTICO ===
         sns.set(style="whitegrid")
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.text(0.5, 0.5, "RELATÓRIO ANALÍTICO AQUI", ha="center", va="center", fontsize=12)
-        ax.axis("off")
+        fig, axs = plt.subplots(figsize=(20, 30))
+        fig.suptitle("ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO", fontsize=16, weight="bold")
 
+        subdims = df.groupby("SUBDIMENSAO")[["PONTUACAO_IDEAL", "PONTUACAO_REAL"]].mean().reset_index()
+        subdims["GAP"] = subdims["PONTUACAO_REAL"] - subdims["PONTUACAO_IDEAL"]
+        subdims = subdims.sort_values("GAP")
+
+        fig, axs = plt.subplots(len(subdims), 1, figsize=(10, len(subdims)*2 + 4))
+        for i, (_, row) in enumerate(subdims.iterrows()):
+            sub_df = df[df["SUBDIMENSAO"] == row["SUBDIMENSAO"]]
+            ax = axs[i]
+            questoes = sub_df["AFIRMACAO"]
+            ideal = sub_df["PONTUACAO_IDEAL"]
+            real = sub_df["PONTUACAO_REAL"]
+            gap = sub_df["GAP"]
+
+            ax.barh(questoes, gap, color="orange", label="GAP")
+            ax.barh(questoes, real, left=0, height=0.3, color="blue", label="Como é")
+            ax.barh(questoes, ideal, left=0, height=0.3, color="green", alpha=0.5, label="Como deveria ser")
+            ax.set_title(f"Subdimensão: {row['SUBDIMENSAO']}")
+
+        plt.legend()
+        plt.tight_layout()
         fig.text(0.01, 0.01, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
 
         nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
         plt.savefig(caminho_local)
 
-        # Upload
+        # Upload para Google Drive
         file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
@@ -1280,3 +1299,4 @@ def relatorio_analitico_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
