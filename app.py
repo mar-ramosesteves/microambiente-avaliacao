@@ -864,9 +864,11 @@ def grafico_waterfall_gaps():
 
     try:
         # Pega os dados do formulário
-        empresa = request.form.get("empresa")
-        codrodada = request.form.get("codrodada")
-        emailLider = request.form.get("emailLider")
+        dados = request.get_json()
+        empresa = dados.get("empresa")
+        codrodada = dados.get("codrodada")
+        emailLider = dados.get("emailLider")
+
 
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
