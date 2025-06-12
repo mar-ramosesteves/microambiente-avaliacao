@@ -1177,11 +1177,10 @@ def relatorio_analitico_microambiente():
     import json
     import io
     import os
-    from datetime import datetime
-    from matplotlib.backends.backend_pdf import PdfPages
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+    from matplotlib.backends.backend_pdf import PdfPages
 
     if request.method == "OPTIONS":
         return '', 204
@@ -1195,6 +1194,7 @@ def relatorio_analitico_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
+        # GOOGLE DRIVE
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1239,7 +1239,6 @@ def relatorio_analitico_microambiente():
             return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-
         somas = {}
         for av in dados_equipes:
             for i in range(1, 49):
@@ -1253,7 +1252,6 @@ def relatorio_analitico_microambiente():
 
         num_avaliacoes = len(dados_equipes)
         registros = []
-
         for i in range(1, 49):
             q = f"Q{i:02d}"
             media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
@@ -1273,52 +1271,46 @@ def relatorio_analitico_microambiente():
                 })
 
         df = pd.DataFrame(registros)
-        df.sort_values(by=["DIMENSAO", "SUBDIMENSAO", "GAP"], inplace=True)
-
         nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
+        pp = PdfPages(caminho_local)
 
-        with PdfPages(caminho_local) as pdf:
-            fig_capa, ax_capa = plt.subplots(figsize=(10, 6))
-            ax_capa.axis("off")
-            ax_capa.text(0.5, 0.65, "MICROAMBIENTE DE EQUIPES\nANÁLISE DE IMPACTOS", ha="center", va="center", fontsize=20, weight="bold")
-            ax_capa.text(0.5, 0.4, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}",
-                         ha="center", fontsize=10, style='italic')
-            pdf.savefig(fig_capa)
+        # CAPA
+        fig, ax = plt.subplots(figsize=(8.27, 11.69))
+        ax.axis("off")
+        ax.text(0.5, 0.6, "MICROAMBIENTE DE EQUIPES\nANÁLISE DE IMPACTOS", ha="center", va="center", fontsize=20, weight="bold")
+        subtitulo = f"{empresa} - {emailLider} - {codrodada} - {pd.Timestamp.now().strftime('%d/%m/%Y')}"
+        ax.text(0.5, 0.45, subtitulo, ha="center", va="center", fontsize=12)
+        pp.savefig(fig)
+        plt.close()
+
+        # GERAÇÃO DOS GRÁFICOS
+        for (dim, sub), grupo in df.groupby(["DIMENSAO", "SUBDIMENSAO"]):
+            fig, axs = plt.subplots(2, 2, figsize=(8.27, 11.69))
+            fig.suptitle(f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {sub.upper()} ({dim.upper()})", fontsize=12, weight="bold")
+            axs = axs.flatten()
+
+            for i, (_, linha) in enumerate(grupo.iterrows()):
+                ax = axs[i]
+                ax.set_xlim(0, 100)
+                ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
+                ax.axvline(linha["GAP"], color="red" if linha["GAP"] > 20 else "green", linewidth=4)
+                ax.set_yticks([])
+                ax.set_xticks(range(0, 101, 10))
+                ax.set_xlabel("GAP (%)", fontsize=8)
+                ax.set_title(f"{linha['QUESTAO']} - {linha['AFIRMACAO']}", fontsize=7, loc='left', pad=10)
+                ax.text(0.01, 1.1, f"Como é: {linha['PONTUACAO_REAL']:.1f}%   |   Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%",
+                        transform=ax.transAxes, fontsize=7, va='bottom')
+
+            for j in range(len(grupo), 4):
+                fig.delaxes(axs[j])
+
+            pp.savefig(fig)
             plt.close()
 
-            for (dim, subdim), grupo in df.groupby(["DIMENSAO", "SUBDIMENSAO"]):
-                fig, axs = plt.subplots(2, 2, figsize=(10, 8))
-                axs = axs.flatten()
-                fig.suptitle(f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {subdim.upper()}", fontsize=12, weight="bold")
+        pp.close()
 
-                for idx, (_, linha) in enumerate(grupo.iterrows()):
-                    if idx >= 4:
-                        break
-                    ax = axs[idx]
-                    ideal = linha["PONTUACAO_IDEAL"]
-                    real = linha["PONTUACAO_REAL"]
-                    gap = linha["GAP"]
-                    titulo = f"{linha['QUESTAO']} - {linha['AFIRMACAO'][:60]}{'...' if len(linha['AFIRMACAO']) > 60 else ''}"
-
-                    ax.barh(["Ideal"], [ideal], color="orange")
-                    ax.barh(["Real"], [real], color="navy")
-                    ax.barh(["GAP"], [abs(gap)], color="red" if abs(gap) > 20 else "green")
-
-                    ax.set_xlim(0, 100)
-                    ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
-                    ax.set_title(titulo, fontsize=8)
-                    for bar in ax.containers:
-                        for rect in bar:
-                            width = rect.get_width()
-                            ax.annotate(f'{width:.0f}%', xy=(width, rect.get_y() + rect.get_height() / 2),
-                                        xytext=(3, 0), textcoords="offset points",
-                                        ha='left', va='center', fontsize=6, color='black')
-
-                plt.tight_layout(rect=[0, 0, 1, 0.95])
-                pdf.savefig(fig)
-                plt.close()
-
+        # Upload
         file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
@@ -1327,3 +1319,4 @@ def relatorio_analitico_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
