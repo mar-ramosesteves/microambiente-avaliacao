@@ -1152,20 +1152,22 @@ def relatorio_gaps_por_questao():
         return jsonify({"erro": str(e)}), 500
 
 
+# Código Python completo para gerar o relatório analítico conforme layout aprovado
+
+from flask import request, jsonify
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import seaborn as sns
+import json
+import io
+import os
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
-    from flask import request, jsonify
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import matplotlib.ticker as mticker
-    import seaborn as sns
-    import json
-    import io
-    import os
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
-
     if request.method == "OPTIONS":
         return '', 204
 
@@ -1178,7 +1180,6 @@ def relatorio_analitico_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # GOOGLE DRIVE
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1195,7 +1196,6 @@ def relatorio_analitico_microambiente():
         id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
         id_rodada = buscar_id(codrodada.lower(), id_empresa)
         id_lider = buscar_id(emailLider.lower(), id_rodada)
-
         if not id_lider:
             return jsonify({"erro": "Pasta do líder não encontrada."}), 404
 
@@ -1224,7 +1224,6 @@ def relatorio_analitico_microambiente():
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
 
-        # Calcular médias por questão
         somas = {}
         for av in dados_equipes:
             for i in range(1, 49):
@@ -1238,7 +1237,6 @@ def relatorio_analitico_microambiente():
 
         num_avaliacoes = len(dados_equipes)
         registros = []
-
         for i in range(1, 49):
             q = f"Q{i:02d}"
             media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
@@ -1258,39 +1256,43 @@ def relatorio_analitico_microambiente():
                 })
 
         df = pd.DataFrame(registros)
-
-        # === GRÁFICO ANALÍTICO ===
         sns.set(style="whitegrid")
-        fig, axs = plt.subplots(figsize=(20, 30))
-        fig.suptitle("ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO", fontsize=16, weight="bold")
-
-        subdims = df.groupby("SUBDIMENSAO")[["PONTUACAO_IDEAL", "PONTUACAO_REAL"]].mean().reset_index()
-        subdims["GAP"] = subdims["PONTUACAO_REAL"] - subdims["PONTUACAO_IDEAL"]
-        subdims = subdims.sort_values("GAP")
-
-        fig, axs = plt.subplots(len(subdims), 1, figsize=(10, len(subdims)*2 + 4))
-        for i, (_, row) in enumerate(subdims.iterrows()):
-            sub_df = df[df["SUBDIMENSAO"] == row["SUBDIMENSAO"]]
-            ax = axs[i]
-            questoes = sub_df["AFIRMACAO"]
-            ideal = sub_df["PONTUACAO_IDEAL"]
-            real = sub_df["PONTUACAO_REAL"]
-            gap = sub_df["GAP"]
-
-            ax.barh(questoes, gap, color="orange", label="GAP")
-            ax.barh(questoes, real, left=0, height=0.3, color="blue", label="Como é")
-            ax.barh(questoes, ideal, left=0, height=0.3, color="green", alpha=0.5, label="Como deveria ser")
-            ax.set_title(f"Subdimensão: {row['SUBDIMENSAO']}")
-
-        plt.legend()
-        plt.tight_layout()
-        fig.text(0.01, 0.01, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
-
+        total_paginas = 0
         nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
-        plt.savefig(caminho_local)
+        with PdfPages(caminho_local) as pdf:
+            for subdim, grupo in df.groupby("SUBDIMENSAO"):
+                fig, axes = plt.subplots(2, 1, figsize=(11, 8))
 
-        # Upload para Google Drive
+                # GAP por Questao (waterfall horizontal por questao)
+                df_sorted = grupo.sort_values("GAP")
+                cores = df_sorted["GAP"].apply(lambda x: "red" if x < -20 else ("orange" if x < -10 else "blue"))
+                ax1 = axes[0]
+                ax1.bar(df_sorted["QUESTAO"], df_sorted["GAP"], color=cores)
+                ax1.set_title(f"GAP por Questão - {subdim}", fontsize=10, weight="bold")
+                ax1.set_ylabel("GAP (%)")
+                ax1.set_ylim(0, 100)
+                ax1.yaxis.set_major_locator(mticker.MultipleLocator(10))
+
+                # Mini Gráfico: Barras triplas
+                ax2 = axes[1]
+                largura = 0.25
+                pos = range(len(grupo))
+                ax2.bar([p - largura for p in pos], grupo["PONTUACAO_REAL"], width=largura, label="Como é")
+                ax2.bar(pos, grupo["PONTUACAO_IDEAL"], width=largura, label="Como deveria ser")
+                ax2.bar([p + largura for p in pos], grupo["GAP"], width=largura, label="GAP")
+                ax2.set_xticks(pos)
+                ax2.set_xticklabels(grupo["QUESTAO"])
+                ax2.set_ylim(0, 100)
+                ax2.set_title(f"Mini Gráfico - Subdimensão: {subdim}", fontsize=10)
+                ax2.legend()
+
+                fig.text(0.5, 0.95, "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO", ha='center', fontsize=12, weight='bold')
+                fig.text(0.5, 0.02, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", ha="center", fontsize=8, color="gray")
+                plt.tight_layout(rect=[0, 0.03, 1, 0.92])
+                pdf.savefig(fig)
+                plt.close(fig)
+
         file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
