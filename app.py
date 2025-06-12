@@ -1159,6 +1159,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
+from matplotlib.backends.backend_pdf import PdfPages
+
 import json
 import io
 import os
