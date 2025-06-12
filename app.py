@@ -1194,7 +1194,6 @@ def relatorio_analitico_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # GOOGLE DRIVE
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1239,6 +1238,7 @@ def relatorio_analitico_microambiente():
             return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+
         somas = {}
         for av in dados_equipes:
             for i in range(1, 49):
@@ -1265,57 +1265,52 @@ def relatorio_analitico_microambiente():
                     "AFIRMACAO": row["AFIRMACAO"],
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
-                    "PONTUACAO_REAL": float(row["PONTUACAO_REAL"]),
+                    "IDEAL": float(row["PONTUACAO_IDEAL"]),
+                    "REAL": float(row["PONTUACAO_REAL"]),
                     "GAP": float(row["GAP"])
                 })
 
         df = pd.DataFrame(registros)
+        df = df.sort_values(by=["DIMENSAO", "SUBDIMENSAO", "QUESTAO"])
+
         nome_arquivo = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
-        pp = PdfPages(caminho_local)
 
-        # CAPA
-        fig, ax = plt.subplots(figsize=(8.27, 11.69))
-        ax.axis("off")
-        ax.text(0.5, 0.6, "MICROAMBIENTE DE EQUIPES\nANÁLISE DE IMPACTOS", ha="center", va="center", fontsize=20, weight="bold")
-        subtitulo = f"{empresa} - {emailLider} - {codrodada} - {pd.Timestamp.now().strftime('%d/%m/%Y')}"
-        ax.text(0.5, 0.45, subtitulo, ha="center", va="center", fontsize=12)
-        pp.savefig(fig)
-        plt.close()
+        with PdfPages(caminho_local) as pdf:
+            # CAPA
+            fig, ax = plt.subplots(figsize=(11.7, 8.3))
+            ax.axis("off")
+            ax.text(0.5, 0.6, "MICROAMBIENTE DE EQUIPES\nANÁLISE DE IMPACTOS", fontsize=22, ha="center", weight="bold")
+            ax.text(0.5, 0.4, f"{empresa} - {emailLider} - {codrodada} - {pd.Timestamp.now().strftime('%d/%m/%Y')}", ha="center", fontsize=12, color="gray")
+            pdf.savefig(fig)
+            plt.close()
 
-                # GERAÇÃO DOS GRÁFICOS
-        for (dim, sub), grupo in df.groupby(["DIMENSAO", "SUBDIMENSAO"]):
-            linhas = grupo.reset_index(drop=True)
-            total = len(linhas)
-            blocos = [linhas.iloc[i:i+4] for i in range(0, total, 4)]
+            for (dim, subdim), grupo in df.groupby(["DIMENSAO", "SUBDIMENSAO"]):
+                fig, axs = plt.subplots(len(grupo), 1, figsize=(11.7, 2.2 * len(grupo)))
+                if len(grupo) == 1:
+                    axs = [axs]
 
-            for bloco in blocos:
-                fig, axs = plt.subplots(2, 2, figsize=(8.27, 11.69))
-                fig.suptitle(f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {sub.upper()} ({dim.upper()})", fontsize=12, weight="bold")
-                axs = axs.flatten()
+                fig.suptitle(f"QUESTÕES QUE IMPACTAM A SUBDIMENSÃO {subdim.upper()}\n(DIMENSÃO {dim.upper()})", fontsize=13, weight="bold", y=1.02)
 
-                for i, (_, linha) in enumerate(bloco.iterrows()):
-                    ax = axs[i]
+                for ax, (_, row) in zip(axs, grupo.iterrows()):
                     ax.set_xlim(0, 100)
-                    ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
-                    ax.axvline(linha["GAP"], color="red" if linha["GAP"] > 20 else "green", linewidth=4)
+                    ax.set_ylim(0, 1)
+                    ax.hlines(0.5, 0, 100, colors="#e0e0e0", linewidth=10)
+
+                    cor = "red" if row["GAP"] > 20 else "green"
+                    ax.hlines(0.5, 0, row["GAP"], colors=cor, linewidth=10)
+
+                    ax.set_xticks(range(0, 110, 10))
+                    ax.xaxis.set_major_formatter(mticker.PercentFormatter())
                     ax.set_yticks([])
-                    ax.set_xticks(range(0, 101, 10))
-                    ax.set_xlabel("GAP (%)", fontsize=8)
-                    ax.set_title(f"{linha['QUESTAO']} - {linha['AFIRMACAO']}", fontsize=7, loc='left', pad=10)
-                    ax.text(0.01, 1.1, f"Como é: {linha['PONTUACAO_REAL']:.1f}%   |   Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%",
-                            transform=ax.transAxes, fontsize=7, va='bottom')
+                    ax.set_title(f"{row['QUESTAO']}. {row['AFIRMACAO']}", fontsize=10, loc="left")
+                    ax.text(0, 0.85, f"Como é: {row['REAL']}%   |   Como deveria ser: {row['IDEAL']}%", fontsize=9)
+                    ax.text(row["GAP"], 0.35, f"{row['GAP']:.1f}%", ha="center", fontsize=8, color="black")
 
-                for j in range(len(bloco), 4):
-                    fig.delaxes(axs[j])
-
-                pp.savefig(fig)
+                fig.tight_layout(rect=[0, 0, 1, 0.95])
+                pdf.savefig(fig)
                 plt.close()
 
-        pp.close()
-
-        # Upload
         file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
@@ -1324,4 +1319,5 @@ def relatorio_analitico_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
 
