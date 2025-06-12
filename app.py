@@ -1249,7 +1249,7 @@ def relatorio_analitico_microambiente():
                 row = linha.iloc[0]
                 registros.append({
                     "QUESTAO": q,
-                    "TEXTO": row["TEXTO"],
+                    "AFIRMACAO": row["AFIRMACAO"],
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
                     "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
