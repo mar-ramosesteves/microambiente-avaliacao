@@ -987,6 +987,11 @@ def grafico_waterfall_gaps():
         plt.tight_layout()
         nome_arquivo = f"waterfall_gaps_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
+
+        # Inserir rodapé com informações do relatório
+        fig.text(0.5, 0.01, 
+                 f"{empresa} - {emailLider} - {codrodada} - {pd.Timestamp.now().strftime('%d/%m/%Y')}", 
+                 ha='center', va='bottom', fontsize=8, color='gray', style='italic')
         plt.savefig(caminho_local)
 
         # Inserir rodapé com informações do relatório
