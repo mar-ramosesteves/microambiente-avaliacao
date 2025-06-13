@@ -1508,7 +1508,7 @@ def termometro_microambiente():
 
         nome_pdf = f"termometro_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
-        fig.suptitle("Quantidade de GAP acima de 20 por cento", fontsize=13, weight="bold")
+        fig.suptitle("STATUS - MICROAMBIENTE DE EQUIPE - QTD GAPS ACIMA DE 20%", fontsize=13, weight="bold")
         fig.text(0.2, 0.1, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
         plt.savefig(caminho_pdf, bbox_inches='tight')
         plt.close()
