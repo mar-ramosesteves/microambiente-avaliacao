@@ -1183,6 +1183,7 @@ def relatorio_analitico_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
+        # Google Drive
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1267,17 +1268,15 @@ def relatorio_analitico_microambiente():
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
-        # --- CAPA ELEGANTE DO RELATÓRIO ---
-c.setFont("Helvetica-Bold", 16)
-c.drawCentredString(width / 2, height - 3.5 * cm, "RELATÓRIO CONSOLIDADO")
-c.drawCentredString(width / 2, height - 4.4 * cm, "DE MICROAMBIENTE")
+        # --- CAPA DO RELATÓRIO ---
+        c.setFont("Helvetica-Bold", 16)
+        c.drawCentredString(width / 2, height - 3.5 * cm, "RELATÓRIO CONSOLIDADO")
+        c.drawCentredString(width / 2, height - 4.4 * cm, "DE MICROAMBIENTE")
 
-c.setFont("Helvetica", 10)
-subtitulo = f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}"
-c.drawCentredString(width / 2, height - 6 * cm, subtitulo)
-
-c.showPage()
-
+        c.setFont("Helvetica", 10)
+        subtitulo = f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}"
+        c.drawCentredString(width / 2, height - 6 * cm, subtitulo)
+        c.showPage()
 
         grupo = df.groupby(["DIMENSAO", "SUBDIMENSAO"])
 
@@ -1302,16 +1301,7 @@ c.showPage()
                 bloco_texto.setFont("Helvetica", 12)
                 bloco_texto.textLines(texto_afirmacao)
                 c.drawText(bloco_texto)
-                y -= (len(texto_afirmacao) // 90 + 1) * 0.6 * cm  # ajusta o espaçamento proporcional ao tamanho
-
-
-
-
-
-                
-                c.setFont("Helvetica", 10)
-                
-                y -= 0.6 * cm
+                y -= (len(texto_afirmacao) // 90 + 1) * 0.6 * cm
 
                 c.setFont("Helvetica", 9)
                 texto = f"Como é: {linha['PONTUACAO_REAL']:.1f}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%  |  GAP: {linha['GAP']:.1f}%"
