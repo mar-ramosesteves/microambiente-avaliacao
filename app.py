@@ -1480,7 +1480,7 @@ def termometro_microambiente():
             (4, "ALTO ESTÍMULO"),
             (8, "ESTÍMULO"),
             (13, "NEUTRO"),
-            (16, "BAIXO ESTÍMULO"),
+            (17, "BAIXO ESTÍMULO"),
             (28, "DESMOTIVAÇÃO➜")
         ]
 
