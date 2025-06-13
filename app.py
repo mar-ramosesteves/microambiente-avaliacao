@@ -1292,11 +1292,11 @@ def relatorio_analitico_microambiente():
             c.setFont("Helvetica-Bold", 12)
             titulo = f"Questões que impactam a dimensão {dim} e subdimensão {sub}"
             c.drawCentredString(width / 2, height - 2 * cm, titulo)
-            y = height - 3.5 * cm
+            y = height - 4.0 * cm
             count = 0
 
             for _, linha in bloco.iterrows():
-                if count == 5:
+                if count == 6:
                     c.showPage()
                     c.setFont("Helvetica-Bold", 12)
                     c.drawCentredString(width / 2, height - 2 * cm, titulo)
