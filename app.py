@@ -1339,6 +1339,10 @@ def relatorio_analitico_microambiente():
 @app.route("/termometro-microambiente", methods=["POST", "OPTIONS"])
 def termometro_microambiente():
     from flask import request, jsonify
+
+    if request.method == "OPTIONS":
+        return '', 204
+
     import pandas as pd
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
@@ -1351,9 +1355,6 @@ def termometro_microambiente():
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
-    if request.method == "OPTIONS":
-        return '', 204
-
     try:
         dados = request.get_json()
         empresa = dados.get("empresa")
@@ -1363,6 +1364,7 @@ def termometro_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
+        # Autenticação com o Google Drive
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1447,52 +1449,58 @@ def termometro_microambiente():
 
         classificacao_texto, cor_texto = classificar_microambiente(gap_count)
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        # Velocímetro semicircular
+        fig, ax = plt.subplots(figsize=(8, 5))
         ax.axis("off")
 
-        theta = np.linspace(-np.pi, 0, 500)
-        radius = 1
-        x = radius * np.cos(theta)
-        y = radius * np.sin(theta)
-        ax.plot(x, y, color="black", linewidth=2)
+        total_gaps = 48
+        angulo = np.linspace(0, np.pi, 500)
+        raio = 1
+        x = raio * np.cos(angulo)
+        y = raio * np.sin(angulo)
+        ax.plot(x, y, color='black', linewidth=2)
 
         cmap = cm.get_cmap('RdYlBu_r')
-        norm = mcolors.Normalize(vmin=0, vmax=48)
+        cores = [cmap(i / total_gaps) for i in range(total_gaps + 1)]
 
-        for i in range(49):
-            angle = -np.pi + (i / 48) * np.pi
-            x0 = 0.9 * np.cos(angle)
-            y0 = 0.9 * np.sin(angle)
-            x1 = 1.0 * np.cos(angle)
-            y1 = 1.0 * np.sin(angle)
-            ax.plot([x0, x1], [y0, y1], color=cmap(norm(i)), linewidth=4)
+        for i in range(total_gaps):
+            start_ang = np.pi * i / total_gaps
+            end_ang = np.pi * (i + 1) / total_gaps
+            x_arc = [0] + list(raio * np.cos(np.linspace(start_ang, end_ang, 10)))
+            y_arc = [0] + list(raio * np.sin(np.linspace(start_ang, end_ang, 10)))
+            ax.fill(x_arc, y_arc, color=cores[i], edgecolor='none')
 
-        ang = -np.pi + (gap_count / 48) * np.pi
-        ax.arrow(0, 0, 0.7 * np.cos(ang), 0.7 * np.sin(ang), width=0.02, color="black")
+        ponteiro_ang = np.pi * gap_count / total_gaps
+        ax.plot([0, raio * np.cos(ponteiro_ang)], [0, raio * np.sin(ponteiro_ang)], color='black', linewidth=2)
 
-        for pos, label in [(0, "Muito Estimulante"), (1, "Estimulante"), (2, "Neutro"), (3, "Desestimulante"), (4, "Desmotivador")]:
-            frac = [1.5, 4.5, 7.5, 10.5, 30][pos] / 48
-            ang = -np.pi + frac * np.pi
-            x_t = 1.15 * np.cos(ang)
-            y_t = 1.15 * np.sin(ang)
-            ax.text(x_t, y_t, label, ha='center', va='center', fontsize=9)
+        faixas = [
+            (1.5, "ALTO ESTÍMULO"),
+            (4.5, "ESTÍMULO"),
+            (7.5, "NEUTRO"),
+            (10.5, "DESESTÍMULO"),
+            (15, "DESMOTIVAÇÃO")
+        ]
 
-        ax.text(0, -0.3, f"{gap_count} GAPs ({gap_count/48:.1%})", ha='center', fontsize=11, weight='bold')
-        ax.text(0, -0.5, f"{classificacao_texto}", ha='center', fontsize=11, weight='bold', color=cor_texto)
+        for val, label in faixas:
+            ang = np.pi * val / total_gaps
+            ax.text(1.1 * raio * np.cos(ang), 1.1 * raio * np.sin(ang), label, fontsize=9, ha='center', va='center')
 
-        fig.suptitle("Quantidade de GAP acima de 20 por cento", fontsize=13, weight="bold")
-        fig.text(0.01, 0.01, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
-
-        pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
-        plt.savefig(pdf_path, bbox_inches='tight')
-        plt.close()
+        ax.text(0, -0.2, f"{gap_count} GAPs ({(gap_count/48)*100:.1f}%)", ha='center', fontsize=12, weight='bold')
+        ax.text(0, -0.35, f"Microambiente: {classificacao_texto}", ha='center', fontsize=11, color=cor_texto, weight='bold')
 
         nome_pdf = f"termometro_microambiente_{emailLider}_{codrodada}.pdf"
+        caminho_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
+        fig.suptitle("Quantidade de GAP acima de 20 por cento", fontsize=13, weight="bold")
+        fig.text(0.01, 0.01, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
+        plt.savefig(caminho_pdf, bbox_inches='tight')
+        plt.close()
+
         file_metadata = {"name": nome_pdf, "parents": [id_lider]}
-        media = MediaIoBaseUpload(open(pdf_path, "rb"), mimetype="application/pdf")
+        media = MediaIoBaseUpload(open(caminho_pdf, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        return jsonify({"mensagem": f"✅ Velocímetro salvo no Google Drive: {nome_pdf}"})
+        return jsonify({"mensagem": f"✅ Termômetro salvo no Google Drive: {nome_pdf}"})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
