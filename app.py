@@ -1480,8 +1480,8 @@ def termometro_microambiente():
             (4, "ALTO ESTÍMULO"),
             (8, "ESTÍMULO"),
             (13, "NEUTRO"),
-            (19, "BAIXO ESTÍMULO"),
-            (28, "DESMOTIVAÇÃO➜")
+            (17, "BAIXO ESTÍMULO"),
+            (27, "DESMOTIVAÇÃO➜")
         ]
 
         for val, label in faixas:
@@ -1491,7 +1491,7 @@ def termometro_microambiente():
 
             # ⚠️ Se for o label "DESMOTIVAÇÃO ➜", ajusta a posição para a esquerda
             if "DESMOTIVAÇÃO" in label:
-                x -= 0.3  # desloca levemente à esquerda
+                x -= 0.4  # desloca levemente à esquerda
 
             ax.text(x, y, label, fontsize=9, ha='center', va='center', weight='bold')
 
