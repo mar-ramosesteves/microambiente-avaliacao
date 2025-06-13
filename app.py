@@ -1339,15 +1339,12 @@ def relatorio_analitico_microambiente():
 @app.route("/termometro-microambiente", methods=["POST", "OPTIONS"])
 def termometro_microambiente():
     from flask import request, jsonify
-
-    if request.method == "OPTIONS":
-        return '', 204  # ✅ resposta correta para preflight
-    
     import pandas as pd
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
     import matplotlib.cm as cm
     import matplotlib.colors as mcolors
+    import numpy as np
     import json, io, os, tempfile
     from datetime import datetime
     from google.oauth2 import service_account
@@ -1366,7 +1363,6 @@ def termometro_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # GOOGLE DRIVE
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1434,10 +1430,9 @@ def termometro_microambiente():
             linha = matriz[matriz["CHAVE"] == chave]
             if not linha.empty:
                 gap = float(linha.iloc[0]["GAP"])
-                if gap > 20:
+                if abs(gap) > 20:
                     gap_count += 1
 
-        # Classificação do microambiente
         def classificar_microambiente(gaps):
             if gaps <= 3:
                 return "Muito Estimulante", "green"
@@ -1452,44 +1447,43 @@ def termometro_microambiente():
 
         classificacao_texto, cor_texto = classificar_microambiente(gap_count)
 
-        # Criar gráfico do termômetro
-        fig, ax = plt.subplots(figsize=(4, 10))
-        ax.set_xlim(0, 4)
-        ax.set_ylim(0, 58)
+        fig, ax = plt.subplots(figsize=(10, 6))
         ax.axis("off")
 
-        tubo_x = 1.5
-        tubo_largura = 1.0
-        max_gap = 48
+        theta = np.linspace(-np.pi, 0, 500)
+        radius = 1
+        x = radius * np.cos(theta)
+        y = radius * np.sin(theta)
+        ax.plot(x, y, color="black", linewidth=2)
 
-        norm = mcolors.Normalize(vmin=0, vmax=max_gap)
         cmap = cm.get_cmap('RdYlBu_r')
-        cor_merc = cmap(norm(gap_count))
+        norm = mcolors.Normalize(vmin=0, vmax=48)
 
-        ax.add_patch(patches.Rectangle((tubo_x, 0), tubo_largura, max_gap, edgecolor='black', facecolor='white', linewidth=2))
-        ax.add_patch(patches.Rectangle((tubo_x, 0), tubo_largura, gap_count, facecolor=cor_merc, edgecolor='black'))
+        for i in range(49):
+            angle = -np.pi + (i / 48) * np.pi
+            x0 = 0.9 * np.cos(angle)
+            y0 = 0.9 * np.sin(angle)
+            x1 = 1.0 * np.cos(angle)
+            y1 = 1.0 * np.sin(angle)
+            ax.plot([x0, x1], [y0, y1], color=cmap(norm(i)), linewidth=4)
 
-        for i in range(0, max_gap + 1, 6):
-            ax.hlines(i, tubo_x - 0.2, tubo_x, color='black', linewidth=1)
-            ax.text(tubo_x - 0.3, i, str(i), va='center', ha='right', fontsize=8)
+        ang = -np.pi + (gap_count / 48) * np.pi
+        ax.arrow(0, 0, 0.7 * np.cos(ang), 0.7 * np.sin(ang), width=0.02, color="black")
 
-        faixas = [
-            (0, 3, "Muito Estimulante"),
-            (4, 6, "Estimulante"),
-            (7, 9, "Neutro"),
-            (10, 12, "Desestimulante"),
-            (13, 48, "Desmotivador")
-        ]
-        for start, end, label in faixas:
-            y_pos = (start + end) / 2
-            ax.text(tubo_x + tubo_largura + 0.1, y_pos, label, va='center', fontsize=9)
+        for pos, label in [(0, "Muito Estimulante"), (1, "Estimulante"), (2, "Neutro"), (3, "Desestimulante"), (4, "Desmotivador")]:
+            frac = [1.5, 4.5, 7.5, 10.5, 30][pos] / 48
+            ang = -np.pi + frac * np.pi
+            x_t = 1.15 * np.cos(ang)
+            y_t = 1.15 * np.sin(ang)
+            ax.text(x_t, y_t, label, ha='center', va='center', fontsize=9)
 
-        ax.text(tubo_x + tubo_largura / 2, gap_count + 1, f"{gap_count} GAPs", ha='center', va='bottom', fontsize=11, weight='bold')
-        ax.text(2, max_gap + 5, f"Microambiente: {classificacao_texto}", ha='center', va='center', fontsize=11, weight='bold', color=cor_texto)
+        ax.text(0, -0.3, f"{gap_count} GAPs ({gap_count/48:.1%})", ha='center', fontsize=11, weight='bold')
+        ax.text(0, -0.5, f"{classificacao_texto}", ha='center', fontsize=11, weight='bold', color=cor_texto)
 
-        pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
         fig.suptitle("Quantidade de GAP acima de 20 por cento", fontsize=13, weight="bold")
         fig.text(0.01, 0.01, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
+
+        pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
         plt.savefig(pdf_path, bbox_inches='tight')
         plt.close()
 
@@ -1498,8 +1492,7 @@ def termometro_microambiente():
         media = MediaIoBaseUpload(open(pdf_path, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        return jsonify({"mensagem": f"✅ Termômetro salvo no Google Drive: {nome_pdf}"})
+        return jsonify({"mensagem": f"✅ Velocímetro salvo no Google Drive: {nome_pdf}"})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
-
