@@ -1477,11 +1477,11 @@ def termometro_microambiente():
 
         # Palavras dentro do velocímetro (posições específicas)
         faixas = [
-            (5, "ALTO ESTÍMULO"),
-            (7, "ESTÍMULO"),
-            (11, "NEUTRO"),
-            (14, "BAIXO ESTÍMULO"),
-            (17, "DESMOTIVAÇÃO ➜")
+            (4, "ALTO ESTÍMULO"),
+            (8, "ESTÍMULO"),
+            (13, "NEUTRO"),
+            (18, "BAIXO ESTÍMULO"),
+            (20, "DESMOTIVAÇÃO ➜")
 ]
 
         for val, label in faixas:
