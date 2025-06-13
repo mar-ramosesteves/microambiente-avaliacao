@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORSD
 import pandas as pd
 import io
 import json
@@ -1480,8 +1480,8 @@ def termometro_microambiente():
             (4, "ALTO ESTÍMULO"),
             (8, "ESTÍMULO"),
             (13, "NEUTRO"),
-            (15, "BAIXO ESTÍMULO"),
-            (27, "DESMOTIVAÇÃO➜")
+            (15.5, "BAIXO ESTÍMULO"),
+            (27.5, "DESMOTIVAÇÃO➜")
         ]
 
         for val, label in faixas:
