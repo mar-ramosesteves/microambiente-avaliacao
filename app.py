@@ -1487,6 +1487,21 @@ def termometro_microambiente():
             ang = np.pi * val / total_gaps
             ax.text(1.1 * raio * np.cos(ang), 1.1 * raio * np.sin(ang), label, fontsize=9, ha='center', va='center')
 
+
+
+        # Marcação da escala de 0 a 48 ao longo do arco
+        for val in range(0, total_gaps + 1):  # total_gaps = 48
+            ang = np.pi * (1 - val / total_gaps)  # esquerda (0) → direita (48)
+            ax.text(
+                1.05 * raio * np.cos(ang),
+                1.05 * raio * np.sin(ang),
+                str(val),
+                fontsize=6,
+                ha='center',
+                va='center'
+            )
+
+
         ax.text(0, -0.2, f"{gap_count} GAPs ({(gap_count/48)*100:.1f}%)", ha='center', fontsize=12, weight='bold')
         ax.text(0, -0.35, f"Microambiente: {classificacao_texto}", ha='center', fontsize=11, color=cor_texto, weight='bold')
 
