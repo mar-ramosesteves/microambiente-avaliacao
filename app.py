@@ -1307,7 +1307,7 @@ def relatorio_analitico_microambiente():
                 frame = Frame(2 * cm, y - 1.2 * cm, width - 4 * cm, 2 * cm, showBoundary=0)
                 paragrafo = Paragraph(texto_afirmacao, estilo_questao)
                 frame.addFromList([paragrafo], c)
-                y -= 1.5 * cm
+                y -= 1.0 * cm
 
                 c.setFont("Helvetica", 9)
                 texto = f"Como é: {linha['PONTUACAO_REAL']:.1f}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%  |  GAP: {linha['GAP']:.1f}%"
@@ -1318,7 +1318,7 @@ def relatorio_analitico_microambiente():
                     c.circle(width - 2 * cm, y + 0.2 * cm, 0.15 * cm, fill=1)
                     c.setFillColorRGB(0, 0, 0)
 
-                y -= 2.5 * cm
+                y -= 3.0 * cm
                 count += 1
 
             c.showPage()
