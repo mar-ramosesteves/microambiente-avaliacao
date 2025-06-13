@@ -1437,15 +1437,15 @@ def termometro_microambiente():
 
         def classificar_microambiente(gaps):
             if gaps <= 3:
-                return "Muito Estimulante", "green"
+                return "ALTO ESTÍMULO", "green"
             elif gaps <= 6:
-                return "Estimulante", "limegreen"
+                return "ESTÍMULO", "limegreen"
             elif gaps <= 9:
-                return "Neutro", "orange"
+                return "NEUTRO", "orange"
             elif gaps <= 12:
-                return "Desestimulante", "orangered"
+                return "BAIXO ESTÍMULO", "orangered"
             else:
-                return "Desmotivador", "red"
+                return "DESMOTIVAÇÃO", "red"
 
         classificacao_texto, cor_texto = classificar_microambiente(gap_count)
 
@@ -1493,7 +1493,7 @@ def termometro_microambiente():
         nome_pdf = f"termometro_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
         fig.suptitle("Quantidade de GAP acima de 20 por cento", fontsize=13, weight="bold")
-        fig.text(0.5, 0.02, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
+        fig.text(0.2, 0.1, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
         plt.savefig(caminho_pdf, bbox_inches='tight')
         plt.close()
 
