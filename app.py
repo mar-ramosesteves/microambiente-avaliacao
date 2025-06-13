@@ -1154,7 +1154,7 @@ def relatorio_gaps_por_questao():
 
 # Código Python completo para gerar o relatório analítico conforme layout aprovado
 
-# Rota ajustada para gerar o Relatório Analítico de Microambiente com layout elegante
+# Rota ajustada para gerar o Relatório Analítico de Microambiente com layout refinado
 
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
@@ -1163,13 +1163,13 @@ def relatorio_analitico_microambiente():
     import matplotlib.pyplot as plt
     import json, io, os, tempfile
     from datetime import datetime
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
     from reportlab.pdfgen import canvas
     from reportlab.lib.colors import red
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
     if request.method == "OPTIONS":
         return '', 204
@@ -1267,38 +1267,47 @@ def relatorio_analitico_microambiente():
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
-        # Capa elegante
-        c.setFont("Helvetica-Bold", 20)
-        c.drawCentredString(width / 2, height - 3 * cm, "RELATÓRIO ANALÍTICO DE MICROAMBIENTE")
+        # Capa centralizada
+        c.setFont("Helvetica-Bold", 22)
+        c.drawCentredString(width / 2, height / 2 + 2 * cm, "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO")
         c.setFont("Helvetica", 12)
-        c.drawCentredString(width / 2, height - 4 * cm, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
+        c.drawCentredString(width / 2, height / 2, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
         c.showPage()
 
         grupo = df.groupby(["DIMENSAO", "SUBDIMENSAO"])
+
         for (dim, sub), bloco in grupo:
-            c.setFont("Helvetica-Bold", 11)
+            c.setFont("Helvetica-Bold", 12)
             titulo = f"Questões que impactam a dimensão {dim} e subdimensão {sub}"
             c.drawCentredString(width / 2, height - 2 * cm, titulo)
             y = height - 3.5 * cm
+            count = 0
 
             for _, linha in bloco.iterrows():
-                if y < 4 * cm:
+                if count == 5:
                     c.showPage()
-                    y = height - 3.5 * cm
-                    c.setFont("Helvetica-Bold", 11)
+                    c.setFont("Helvetica-Bold", 12)
                     c.drawCentredString(width / 2, height - 2 * cm, titulo)
+                    y = height - 3.5 * cm
+                    count = 0
 
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(2 * cm, y, f"{linha['QUESTAO']}: ")
                 c.setFont("Helvetica", 10)
-                c.drawString(2 * cm, y, f"{linha['QUESTAO']}: {linha['AFIRMACAO'][:100]}")
+                c.drawString(4 * cm, y, linha['AFIRMACAO'])
                 y -= 0.6 * cm
 
-                texto = f"Como é: {linha['PONTUACAO_REAL']}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']}%  |  GAP: {linha['GAP']}%"
+                c.setFont("Helvetica", 9)
+                texto = f"Como é: {linha['PONTUACAO_REAL']:.1f}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%  |  GAP: {linha['GAP']:.1f}%"
                 c.drawString(2.5 * cm, y, texto)
+
                 if abs(linha['GAP']) > 20:
                     c.setFillColor(red)
                     c.circle(width - 2 * cm, y + 0.2 * cm, 0.15 * cm, fill=1)
                     c.setFillColorRGB(0, 0, 0)
-                y -= 1.0 * cm
+
+                y -= 1.2 * cm
+                count += 1
 
             c.showPage()
 
@@ -1308,7 +1317,7 @@ def relatorio_analitico_microambiente():
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        return jsonify({"mensagem": f"✅ Relatório analítico salvo com sucesso no Google Drive: {nome_pdf}"})
+        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_pdf}"})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
