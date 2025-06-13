@@ -1154,15 +1154,13 @@ def relatorio_gaps_por_questao():
 
 # Código Python completo para gerar o relatório analítico conforme layout aprovado
 
-# Versão finalizada da rota Flask `/relatorio-analitico-microambiente` com layout validado: múltiplas questões por página agrupadas por subdimensão, barras de GAP, escala e legendas
-
+# Rota ajustada para gerar o Relatório Analítico de Microambiente com layout elegante
 
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
     from flask import request, jsonify
     import pandas as pd
     import matplotlib.pyplot as plt
-    import seaborn as sns
     import json, io, os, tempfile
     from datetime import datetime
     from google.oauth2 import service_account
@@ -1171,6 +1169,7 @@ def relatorio_analitico_microambiente():
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
     from reportlab.pdfgen import canvas
+    from reportlab.lib.colors import red
 
     if request.method == "OPTIONS":
         return '', 204
@@ -1263,13 +1262,14 @@ def relatorio_analitico_microambiente():
         df = pd.DataFrame(registros)
         df = df.sort_values(by=["DIMENSAO", "SUBDIMENSAO", "QUESTAO"])
 
-        nome_pdf = f"relatorio_consolidado_microambiente_{emailLider}_{codrodada}.pdf"
+        nome_pdf = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
+        # Capa elegante
         c.setFont("Helvetica-Bold", 20)
-        c.drawCentredString(width / 2, height - 3 * cm, "RELATÓRIO CONSOLIDADO DE MICROAMBIENTE")
+        c.drawCentredString(width / 2, height - 3 * cm, "RELATÓRIO ANALÍTICO DE MICROAMBIENTE")
         c.setFont("Helvetica", 12)
         c.drawCentredString(width / 2, height - 4 * cm, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
         c.showPage()
@@ -1278,23 +1278,26 @@ def relatorio_analitico_microambiente():
         for (dim, sub), bloco in grupo:
             c.setFont("Helvetica-Bold", 11)
             titulo = f"Questões que impactam a dimensão {dim} e subdimensão {sub}"
-            c.drawString(2 * cm, height - 2 * cm, titulo)
-            y = height - 3 * cm
+            c.drawCentredString(width / 2, height - 2 * cm, titulo)
+            y = height - 3.5 * cm
 
             for _, linha in bloco.iterrows():
-                if y < 5 * cm:
+                if y < 4 * cm:
                     c.showPage()
-                    y = height - 3 * cm
+                    y = height - 3.5 * cm
+                    c.setFont("Helvetica-Bold", 11)
+                    c.drawCentredString(width / 2, height - 2 * cm, titulo)
 
                 c.setFont("Helvetica", 10)
                 c.drawString(2 * cm, y, f"{linha['QUESTAO']}: {linha['AFIRMACAO'][:100]}")
                 y -= 0.6 * cm
 
                 texto = f"Como é: {linha['PONTUACAO_REAL']}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']}%  |  GAP: {linha['GAP']}%"
-                cor = (1, 0, 0) if linha['GAP'] > 20 else (0, 0, 0)
-                c.setFillColorRGB(*cor)
                 c.drawString(2.5 * cm, y, texto)
-                c.setFillColorRGB(0, 0, 0)
+                if abs(linha['GAP']) > 20:
+                    c.setFillColor(red)
+                    c.circle(width - 2 * cm, y + 0.2 * cm, 0.15 * cm, fill=1)
+                    c.setFillColorRGB(0, 0, 0)
                 y -= 1.0 * cm
 
             c.showPage()
@@ -1305,7 +1308,7 @@ def relatorio_analitico_microambiente():
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        return jsonify({"mensagem": f"✅ Relatório consolidado salvo no Google Drive: {nome_pdf}"})
+        return jsonify({"mensagem": f"✅ Relatório analítico salvo com sucesso no Google Drive: {nome_pdf}"})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
