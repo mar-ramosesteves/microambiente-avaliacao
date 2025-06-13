@@ -1485,6 +1485,17 @@ def termometro_microambiente():
 ]
 
         for val, label in faixas:
+        ang = np.pi * (1 - val / total_gaps)
+        x = 0.7 * raio * np.cos(ang)
+        y = 0.7 * raio * np.sin(ang)
+
+        # ⚠️ Se for o label "DESMOTIVAÇÃO ➜", ajusta a posição para a esquerda
+        if "DESMOTIVAÇÃO" in label:
+            x -= 0.4  # desloca levemente à esquerda
+
+    ax.text(x, y, label, fontsize=9, ha='center', va='center', weight='bold')
+
+        for val, label in faixas:
             ang = np.pi * (1 - val / total_gaps)
             ax.text(0.7 * raio * np.cos(ang), 0.7 * raio * np.sin(ang), label, fontsize=9, ha='center', va='center', weight='bold')
 
