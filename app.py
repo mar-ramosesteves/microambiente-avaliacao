@@ -1267,19 +1267,17 @@ def relatorio_analitico_microambiente():
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
-        # Capa centralizada
-        c.setFont("Helvetica-Bold", 16)
-        titulo = "RELATÓRIO CONSOLIDADO\nDE MICROAMBIENTE"
-        texto = c.beginText()
-        texto.setTextOrigin(width / 2, height - 4 * cm)
-        texto.setFont("Helvetica-Bold", 16)
-        texto.setAlignHoriz('CENTER')
-        texto.textLines(titulo)
-        c.drawText(texto)
+        # --- CAPA ELEGANTE DO RELATÓRIO ---
+c.setFont("Helvetica-Bold", 16)
+c.drawCentredString(width / 2, height - 3.5 * cm, "RELATÓRIO CONSOLIDADO")
+c.drawCentredString(width / 2, height - 4.4 * cm, "DE MICROAMBIENTE")
 
-        c.setFont("Helvetica", 12)
-        c.drawCentredString(width / 2, height / 2, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
-        c.showPage()
+c.setFont("Helvetica", 10)
+subtitulo = f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}"
+c.drawCentredString(width / 2, height - 6 * cm, subtitulo)
+
+c.showPage()
+
 
         grupo = df.groupby(["DIMENSAO", "SUBDIMENSAO"])
 
