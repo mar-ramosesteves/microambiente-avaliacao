@@ -1156,24 +1156,21 @@ def relatorio_gaps_por_questao():
 
 # Versão finalizada da rota Flask `/relatorio-analitico-microambiente` com layout validado: múltiplas questões por página agrupadas por subdimensão, barras de GAP, escala e legendas
 
+
 @app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente():
     from flask import request, jsonify
     import pandas as pd
     import matplotlib.pyplot as plt
-    import matplotlib.ticker as mticker
     import seaborn as sns
-    import json
-    import io
-    import os
-    import tempfile
+    import json, io, os, tempfile
     from datetime import datetime
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
-    from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
+    from reportlab.pdfgen import canvas
 
     if request.method == "OPTIONS":
         return '', 204
@@ -1264,56 +1261,51 @@ def relatorio_analitico_microambiente():
                 })
 
         df = pd.DataFrame(registros)
+        df = df.sort_values(by=["DIMENSAO", "SUBDIMENSAO", "QUESTAO"])
 
-        nome_pdf = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
+        nome_pdf = f"relatorio_consolidado_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_local = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
-        # Capa
-        c.setFont("Helvetica-Bold", 22)
-        c.drawCentredString(width / 2, height / 2 + 2 * cm, "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO")
+        c.setFont("Helvetica-Bold", 20)
+        c.drawCentredString(width / 2, height - 3 * cm, "RELATÓRIO CONSOLIDADO DE MICROAMBIENTE")
         c.setFont("Helvetica", 12)
-        c.drawCentredString(width / 2, height / 2, f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}")
+        c.drawCentredString(width / 2, height - 4 * cm, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
         c.showPage()
 
-        # Quebra por subdimensão com até 4 questões por página
-        agrupado = df.groupby("SUBDIMENSAO")
-        for sub, grupo in agrupado:
-            grupo = grupo.reset_index(drop=True)
-            for i in range(0, len(grupo), 4):
-                subset = grupo.iloc[i:i+4]
-                c.setFont("Helvetica-Bold", 13)
-                c.drawCentredString(width / 2, height - 2 * cm, f"AFIRMAÇÕES QUE IMPACTAM A SUBDIMENSÃO {sub.upper()}")
-                y_base = height - 3 * cm
-                for j, linha in subset.iterrows():
-                    y = y_base - (j % 4) * 5 * cm
-                    c.setFont("Helvetica-Bold", 10)
-                    c.drawString(2 * cm, y, f"{linha['QUESTAO']}: {linha['AFIRMACAO'][:90]}")
-                    c.setFont("Helvetica", 9)
-                    c.drawString(2 * cm, y - 0.5 * cm, f"Como é: {linha['PONTUACAO_REAL']:.1f}% | Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}% | GAP: {linha['GAP']:.1f}%")
-                    x_barra = 2 * cm
-                    y_barra = y - 1.3 * cm
-                    largura = 16 * cm
-                    altura = 0.4 * cm
-                    cor = (1, 0, 0) if linha['GAP'] > 20 else (0, 0.6, 0.2)
-                    c.setFillColorRGB(*cor)
-                    c.rect(x_barra, y_barra, largura * linha['GAP'] / 100, altura, fill=1, stroke=0)
-                    for marca in range(0, 110, 10):
-                        xi = x_barra + (largura * marca / 100)
-                        c.setStrokeGray(0.5)
-                        c.line(xi, y_barra, xi, y_barra + altura)
-                        c.setFont("Helvetica", 6)
-                        c.setFillColorRGB(0, 0, 0)
-                        c.drawString(xi - 0.3 * cm, y_barra - 0.3 * cm, f"{marca}%")
-                c.showPage()
+        grupo = df.groupby(["DIMENSAO", "SUBDIMENSAO"])
+        for (dim, sub), bloco in grupo:
+            c.setFont("Helvetica-Bold", 11)
+            titulo = f"Questões que impactam a dimensão {dim} e subdimensão {sub}"
+            c.drawString(2 * cm, height - 2 * cm, titulo)
+            y = height - 3 * cm
+
+            for _, linha in bloco.iterrows():
+                if y < 5 * cm:
+                    c.showPage()
+                    y = height - 3 * cm
+
+                c.setFont("Helvetica", 10)
+                c.drawString(2 * cm, y, f"{linha['QUESTAO']}: {linha['AFIRMACAO'][:100]}")
+                y -= 0.6 * cm
+
+                texto = f"Como é: {linha['PONTUACAO_REAL']}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']}%  |  GAP: {linha['GAP']}%"
+                cor = (1, 0, 0) if linha['GAP'] > 20 else (0, 0, 0)
+                c.setFillColorRGB(*cor)
+                c.drawString(2.5 * cm, y, texto)
+                c.setFillColorRGB(0, 0, 0)
+                y -= 1.0 * cm
+
+            c.showPage()
 
         c.save()
+
         file_metadata = {"name": nome_pdf, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_pdf}"})
+        return jsonify({"mensagem": f"✅ Relatório consolidado salvo no Google Drive: {nome_pdf}"})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
