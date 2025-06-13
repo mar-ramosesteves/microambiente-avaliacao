@@ -1268,8 +1268,15 @@ def relatorio_analitico_microambiente():
         width, height = A4
 
         # Capa centralizada
-        c.setFont("Helvetica-Bold", 22)
-        c.drawCentredString(width / 2, height / 2 + 2 * cm, "ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO")
+        c.setFont("Helvetica-Bold", 16)
+        titulo = "RELATÓRIO CONSOLIDADO\nDE MICROAMBIENTE"
+        texto = c.beginText()
+        texto.setTextOrigin(width / 2, height - 4 * cm)
+        texto.setFont("Helvetica-Bold", 16)
+        texto.setAlignHoriz('CENTER')
+        texto.textLines(titulo)
+        c.drawText(texto)
+
         c.setFont("Helvetica", 12)
         c.drawCentredString(width / 2, height / 2, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}")
         c.showPage()
@@ -1291,10 +1298,21 @@ def relatorio_analitico_microambiente():
                     y = height - 3.5 * cm
                     count = 0
 
-                c.setFont("Helvetica-Bold", 10)
-                c.drawString(2 * cm, y, f"{linha['QUESTAO']}: ")
+                c.setFont("Helvetica-Bold", 12)
+                texto_afirmacao = f"{linha['QUESTAO']}: {linha['AFIRMACAO']}"
+                bloco_texto = c.beginText(2 * cm, y)
+                bloco_texto.setFont("Helvetica", 12)
+                bloco_texto.textLines(texto_afirmacao)
+                c.drawText(bloco_texto)
+                y -= (len(texto_afirmacao) // 90 + 1) * 0.6 * cm  # ajusta o espaçamento proporcional ao tamanho
+
+
+
+
+
+                
                 c.setFont("Helvetica", 10)
-                c.drawString(4 * cm, y, linha['AFIRMACAO'])
+                
                 y -= 0.6 * cm
 
                 c.setFont("Helvetica", 9)
@@ -1306,7 +1324,7 @@ def relatorio_analitico_microambiente():
                     c.circle(width - 2 * cm, y + 0.2 * cm, 0.15 * cm, fill=1)
                     c.setFillColorRGB(0, 0, 0)
 
-                y -= 1.2 * cm
+                y -= 2.0 * cm
                 count += 1
 
             c.showPage()
