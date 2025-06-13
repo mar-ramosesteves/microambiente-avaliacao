@@ -1460,7 +1460,8 @@ def termometro_microambiente():
         y = raio * np.sin(angulo)
         ax.plot(x, y, color='black', linewidth=2)
 
-        cmap = cm.get_cmap('RdYlBu_r')
+        cmap = cm.get_cmap('RdYlBu')
+
         cores = [cmap(i / total_gaps) for i in range(total_gaps + 1)]
 
         for i in range(total_gaps):
@@ -1470,16 +1471,17 @@ def termometro_microambiente():
             y_arc = [0] + list(raio * np.sin(np.linspace(start_ang, end_ang, 10)))
             ax.fill(x_arc, y_arc, color=cores[i], edgecolor='none')
 
-        ponteiro_ang = np.pi * gap_count / total_gaps
+        ponteiro_ang = np.pi * (1 - gap_count / total_gaps)
+
         ax.plot([0, raio * np.cos(ponteiro_ang)], [0, raio * np.sin(ponteiro_ang)], color='black', linewidth=2)
 
         faixas = [
-            (1.5, "ALTO ESTÍMULO"),
-            (4.5, "ESTÍMULO"),
-            (7.5, "NEUTRO"),
-            (10.5, "DESESTÍMULO"),
-            (15, "DESMOTIVAÇÃO")
-        ]
+            (46.5, "ALTO ESTÍMULO"),
+            (42.0, "ESTÍMULO"),
+            (39.0, "NEUTRO"),
+            (36.0, "DESESTÍMULO"),
+            (24.0, "DESMOTIVAÇÃO")
+]
 
         for val, label in faixas:
             ang = np.pi * val / total_gaps
@@ -1491,7 +1493,7 @@ def termometro_microambiente():
         nome_pdf = f"termometro_microambiente_{emailLider}_{codrodada}.pdf"
         caminho_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
         fig.suptitle("Quantidade de GAP acima de 20 por cento", fontsize=13, weight="bold")
-        fig.text(0.01, 0.01, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
+        fig.text(0.5, 0.02, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
         plt.savefig(caminho_pdf, bbox_inches='tight')
         plt.close()
 
