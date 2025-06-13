@@ -1309,3 +1309,173 @@ def relatorio_analitico_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
+
+
+@app.route("/termometro-microambiente", methods=["POST", "OPTIONS"])
+def termometro_microambiente():
+    from flask import request, jsonify
+
+    if request.method == "OPTIONS":
+        return '', 204  # ✅ resposta correta para preflight
+    
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+    import json, io, os, tempfile
+    from datetime import datetime
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+
+    if request.method == "OPTIONS":
+        return '', 204
+
+    try:
+        dados = request.get_json()
+        empresa = dados.get("empresa")
+        codrodada = dados.get("codrodada")
+        emailLider = dados.get("emailLider")
+
+        if not all([empresa, codrodada, emailLider]):
+            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+
+        # GOOGLE DRIVE
+        SCOPES = ['https://www.googleapis.com/auth/drive']
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
+            scopes=SCOPES
+        )
+        service = build('drive', 'v3', credentials=creds)
+        PASTA_RAIZ = "1l4kOZwed-Yc5nHU4RBTmWQz3zYAlpniS"
+
+        def buscar_id(nome, pai):
+            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
+            return resp[0]["id"] if resp else None
+
+        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
+        id_rodada = buscar_id(codrodada.lower(), id_empresa)
+        id_lider = buscar_id(emailLider.lower(), id_rodada)
+
+        if not id_lider:
+            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+
+        arquivos = service.files().list(
+            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
+            fields="files(id, name)").execute().get("files", [])
+
+        dados_equipes = []
+        for arq in arquivos:
+            nome = arq["name"]
+            if "microambiente" in nome and emailLider in nome and codrodada in nome:
+                req = service.files().get_media(fileId=arq["id"])
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, req)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                fh.seek(0)
+                conteudo = json.load(fh)
+                for bloco in conteudo.get("avaliacoesEquipe", []):
+                    if bloco.get("tipo") == "microambiente_equipe":
+                        dados_equipes.append(bloco)
+
+        if not dados_equipes:
+            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+
+        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+
+        somas = {}
+        for av in dados_equipes:
+            for i in range(1, 49):
+                q = f"Q{i:02d}"
+                ideal = int(av.get(f"{q}k", 0))
+                real = int(av.get(f"{q}C", 0))
+                if q not in somas:
+                    somas[q] = {"ideal": 0, "real": 0}
+                somas[q]["ideal"] += ideal
+                somas[q]["real"] += real
+
+        num_avaliacoes = len(dados_equipes)
+        gap_count = 0
+
+        for i in range(1, 49):
+            q = f"Q{i:02d}"
+            media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
+            media_real = round(somas[q]["real"] / num_avaliacoes)
+            chave = f"{q}_I{media_ideal}_R{media_real}"
+            linha = matriz[matriz["CHAVE"] == chave]
+            if not linha.empty:
+                gap = float(linha.iloc[0]["GAP"])
+                if gap > 20:
+                    gap_count += 1
+
+        # Classificação do microambiente
+        def classificar_microambiente(gaps):
+            if gaps <= 3:
+                return "Muito Estimulante", "green"
+            elif gaps <= 6:
+                return "Estimulante", "limegreen"
+            elif gaps <= 9:
+                return "Neutro", "orange"
+            elif gaps <= 12:
+                return "Desestimulante", "orangered"
+            else:
+                return "Desmotivador", "red"
+
+        classificacao_texto, cor_texto = classificar_microambiente(gap_count)
+
+        # Criar gráfico do termômetro
+        fig, ax = plt.subplots(figsize=(4, 10))
+        ax.set_xlim(0, 4)
+        ax.set_ylim(0, 58)
+        ax.axis("off")
+
+        tubo_x = 1.5
+        tubo_largura = 1.0
+        max_gap = 48
+
+        norm = mcolors.Normalize(vmin=0, vmax=max_gap)
+        cmap = cm.get_cmap('RdYlBu_r')
+        cor_merc = cmap(norm(gap_count))
+
+        ax.add_patch(patches.Rectangle((tubo_x, 0), tubo_largura, max_gap, edgecolor='black', facecolor='white', linewidth=2))
+        ax.add_patch(patches.Rectangle((tubo_x, 0), tubo_largura, gap_count, facecolor=cor_merc, edgecolor='black'))
+
+        for i in range(0, max_gap + 1, 6):
+            ax.hlines(i, tubo_x - 0.2, tubo_x, color='black', linewidth=1)
+            ax.text(tubo_x - 0.3, i, str(i), va='center', ha='right', fontsize=8)
+
+        faixas = [
+            (0, 3, "Muito Estimulante"),
+            (4, 6, "Estimulante"),
+            (7, 9, "Neutro"),
+            (10, 12, "Desestimulante"),
+            (13, 48, "Desmotivador")
+        ]
+        for start, end, label in faixas:
+            y_pos = (start + end) / 2
+            ax.text(tubo_x + tubo_largura + 0.1, y_pos, label, va='center', fontsize=9)
+
+        ax.text(tubo_x + tubo_largura / 2, gap_count + 1, f"{gap_count} GAPs", ha='center', va='bottom', fontsize=11, weight='bold')
+        ax.text(2, max_gap + 5, f"Microambiente: {classificacao_texto}", ha='center', va='center', fontsize=11, weight='bold', color=cor_texto)
+
+        pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
+        fig.suptitle("Quantidade de GAP acima de 20 por cento", fontsize=13, weight="bold")
+        fig.text(0.01, 0.01, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
+        plt.savefig(pdf_path, bbox_inches='tight')
+        plt.close()
+
+        nome_pdf = f"termometro_microambiente_{emailLider}_{codrodada}.pdf"
+        file_metadata = {"name": nome_pdf, "parents": [id_lider]}
+        media = MediaIoBaseUpload(open(pdf_path, "rb"), mimetype="application/pdf")
+        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+        return jsonify({"mensagem": f"✅ Termômetro salvo no Google Drive: {nome_pdf}"})
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
