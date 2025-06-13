@@ -1475,17 +1475,18 @@ def termometro_microambiente():
 
         ax.plot([0, raio * np.cos(ponteiro_ang)], [0, raio * np.sin(ponteiro_ang)], color='black', linewidth=2)
 
+        # Palavras dentro do velocímetro (posições específicas)
         faixas = [
-            (46.5, "ALTO ESTÍMULO"),
-            (42.0, "ESTÍMULO"),
-            (39.0, "NEUTRO"),
-            (36.0, "DESESTÍMULO"),
-            (24.0, "DESMOTIVAÇÃO")
+            (3, "ALTO ESTÍMULO"),
+            (6, "ESTÍMULO"),
+            (9, "NEUTRO"),
+            (12, "BAIXO ESTÍMULO"),
+            (39, "DESMOTIVAÇÃO ➜")
 ]
 
         for val, label in faixas:
-            ang = np.pi * val / total_gaps
-            ax.text(1.1 * raio * np.cos(ang), 1.1 * raio * np.sin(ang), label, fontsize=9, ha='center', va='center')
+            ang = np.pi * (1 - val / total_gaps)
+            ax.text(0.7 * raio * np.cos(ang), 0.7 * raio * np.sin(ang), label, fontsize=9, ha='center', va='center', weight='bold')
 
 
 
