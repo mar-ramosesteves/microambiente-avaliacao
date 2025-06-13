@@ -1166,6 +1166,9 @@ def relatorio_analitico_microambiente():
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
     from reportlab.pdfgen import canvas
+    from reportlab.platypus import Paragraph, Frame
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.enums import TA_JUSTIFY
     from reportlab.lib.colors import red
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
@@ -1183,7 +1186,6 @@ def relatorio_analitico_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # Google Drive
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1268,15 +1270,21 @@ def relatorio_analitico_microambiente():
         c = canvas.Canvas(caminho_local, pagesize=A4)
         width, height = A4
 
-        # --- CAPA DO RELATÓRIO ---
+        # --- CAPA ELEGANTE ---
         c.setFont("Helvetica-Bold", 16)
         c.drawCentredString(width / 2, height - 3.5 * cm, "RELATÓRIO CONSOLIDADO")
         c.drawCentredString(width / 2, height - 4.4 * cm, "DE MICROAMBIENTE")
-
         c.setFont("Helvetica", 10)
         subtitulo = f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}"
         c.drawCentredString(width / 2, height - 6 * cm, subtitulo)
         c.showPage()
+
+        styles = getSampleStyleSheet()
+        estilo_questao = styles["Normal"]
+        estilo_questao.fontName = "Helvetica"
+        estilo_questao.fontSize = 11
+        estilo_questao.leading = 14
+        estilo_questao.alignment = TA_JUSTIFY
 
         grupo = df.groupby(["DIMENSAO", "SUBDIMENSAO"])
 
@@ -1295,13 +1303,11 @@ def relatorio_analitico_microambiente():
                     y = height - 3.5 * cm
                     count = 0
 
-                c.setFont("Helvetica-Bold", 12)
                 texto_afirmacao = f"{linha['QUESTAO']}: {linha['AFIRMACAO']}"
-                bloco_texto = c.beginText(2 * cm, y)
-                bloco_texto.setFont("Helvetica", 12)
-                bloco_texto.textLines(texto_afirmacao)
-                c.drawText(bloco_texto)
-                y -= (len(texto_afirmacao) // 90 + 1) * 0.6 * cm
+                frame = Frame(2 * cm, y - 1.2 * cm, width - 4 * cm, 2 * cm, showBoundary=0)
+                paragrafo = Paragraph(texto_afirmacao, estilo_questao)
+                frame.addFromList([paragrafo], c)
+                y -= 2.4 * cm
 
                 c.setFont("Helvetica", 9)
                 texto = f"Como é: {linha['PONTUACAO_REAL']:.1f}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%  |  GAP: {linha['GAP']:.1f}%"
