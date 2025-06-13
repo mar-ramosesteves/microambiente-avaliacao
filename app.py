@@ -1481,7 +1481,7 @@ def termometro_microambiente():
             (8, "ESTÍMULO"),
             (13, "NEUTRO"),
             (18, "BAIXO ESTÍMULO"),
-            (20, "DESMOTIVAÇÃO ➜")
+            (22, "DESMOTIVAÇÃO ➜")
 ]
 
         for val, label in faixas:
