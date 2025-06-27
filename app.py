@@ -191,12 +191,7 @@ def gerar_relatorio_microambiente():
         metadata = {"name": nome_arquivo, "parents": [id_lider]}
         service.files().create(body=metadata, media_body=media).execute()
 
-        # 🔁 Salvar JSON com os dados do relatório consolidado (caso precise reaproveitar em outro local)
-        nome_base = nome_arquivo.replace(".json", "")
-        salvar_json_no_drive(relatorio, nome_base, service, id_lider)
-
         return jsonify({"mensagem": "✅ Relatório consolidado salvo no Drive com sucesso."})
-
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
@@ -1535,24 +1530,3 @@ def termometro_microambiente():
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
-
-
-
-def salvar_json_no_drive(dados, nome_base, service, id_lider):
-    try:
-        from io import BytesIO
-        import json
-        from googleapiclient.http import MediaIoBaseUpload
-
-        nome_arquivo = f"{nome_base}.json"
-        conteudo_bytes = BytesIO(json.dumps(dados, indent=2, ensure_ascii=False).encode("utf-8"))
-        media = MediaIoBaseUpload(conteudo_bytes, mimetype="application/json")
-
-        file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
-        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-        print(f"✅ JSON salvo no Drive: {nome_arquivo}")
-    except Exception as e:
-        print(f"❌ Erro ao salvar JSON: {str(e)}")
-
-
