@@ -191,7 +191,12 @@ def gerar_relatorio_microambiente():
         metadata = {"name": nome_arquivo, "parents": [id_lider]}
         service.files().create(body=metadata, media_body=media).execute()
 
+        # 🔁 Salvar JSON com os dados do relatório consolidado (caso precise reaproveitar em outro local)
+        nome_base = nome_arquivo.replace(".json", "")
+        salvar_json_no_drive(relatorio, nome_base, service, id_lider)
+
         return jsonify({"mensagem": "✅ Relatório consolidado salvo no Drive com sucesso."})
+
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
