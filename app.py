@@ -9,6 +9,7 @@ from datetime import datetime
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+from io import BytesIO
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["https://gestor.thehrkey.tech"]}}, supports_credentials=True)
@@ -439,11 +440,11 @@ def salvar_grafico_autoavaliacao():
 
         # 🔁 Salvar JSON usado pela IA com prefixo "ia_"
         try:
-            nome_base_ia = "ia_" + nome_pdf.replace(".pdf", "")
-            from io import BytesIO
             import json
+            from io import BytesIO
             from googleapiclient.http import MediaIoBaseUpload
 
+            nome_base_ia = "ia_" + nome_pdf.replace(".pdf", "")
             conteudo_bytes = BytesIO(json.dumps(dados_grafico, indent=2, ensure_ascii=False).encode("utf-8"))
             media = MediaIoBaseUpload(conteudo_bytes, mimetype="application/json")
 
