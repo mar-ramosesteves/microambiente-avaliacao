@@ -437,19 +437,7 @@ def salvar_grafico_autoavaliacao():
             metadata = {"name": nome_pdf, "parents": [id_lider]}
             service.files().create(body=metadata, media_body=media).execute()
 
-        # 🔁 Salvar JSON com os dados do gráfico de autoavaliação por dimensão
-        dados_gerados = []
-        for _, row in resultado.iterrows():
-            dados_gerados.append({
-                "dimensao": row["DIMENSAO"],
-                "ideal": round(row["IDEAL_%"], 1),
-                "real": round(row["REAL_%"], 1),
-                "gap": round(row["IDEAL_%"] - row["REAL_%"], 1)
-            })
-
-        nome_base = nome_pdf.replace(".pdf", "")
-        salvar_json_no_drive(dados_gerados, nome_base, service, id_lider)
-
+        
 
         os.remove(caminho_pdf)
         return jsonify({"mensagem": "✅ Gráfico gerado e salvo no Drive com sucesso."})
