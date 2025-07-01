@@ -1539,3 +1539,26 @@ def termometro_microambiente():
         return jsonify({"erro": str(e)}), 500
 
 
+def salvar_json_ia_no_drive(dados, nome_pdf, service, id_lider):
+    try:
+        from io import BytesIO
+        import json
+        from googleapiclient.http import MediaIoBaseUpload
+
+        # Prefixar com "ia_" e trocar extensão
+        nome_json = "ia_" + nome_pdf.replace(".pdf", ".json")
+
+        # Converter os dados em bytes
+        conteudo = BytesIO(json.dumps(dados, indent=2, ensure_ascii=False).encode("utf-8"))
+        media = MediaIoBaseUpload(conteudo, mimetype="application/json")
+
+        # Enviar para o Google Drive
+        file_metadata = {"name": nome_json, "parents": [id_lider]}
+        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+        print(f"✅ JSON IA salvo com sucesso: {nome_json}")
+    except Exception as e:
+        print(f"❌ Erro ao salvar JSON IA: {str(e)}")
+
+
+
