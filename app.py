@@ -437,7 +437,10 @@ def salvar_grafico_autoavaliacao():
             metadata = {"name": nome_pdf, "parents": [id_lider]}
             service.files().create(body=metadata, media_body=media).execute()
 
-        
+        # 🔁 Salvar também o JSON da IA com prefixo seguro
+        nome_base = nome_pdf.replace(".pdf", "")
+        salvar_json_ia_no_drive(dados_usados_na_ia, nome_base, service, id_lider)
+
 
         os.remove(caminho_pdf)
         return jsonify({"mensagem": "✅ Gráfico gerado e salvo no Drive com sucesso."})
