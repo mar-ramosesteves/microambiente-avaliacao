@@ -455,6 +455,9 @@ def salvar_grafico_autoavaliacao():
         return jsonify({"mensagem": "✅ Gráfico gerado e salvo no Drive com sucesso."})
 
     except Exception as e:
+        import traceback
+        print("❌ ERRO NA ROTA /salvar-grafico-autoavaliacao:")
+        traceback.print_exc()
         return jsonify({"erro": str(e)}), 500
 
 
