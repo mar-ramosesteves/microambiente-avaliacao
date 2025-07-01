@@ -586,17 +586,31 @@ def salvar_grafico_autoavaliacao_subdimensao():
 
 
         # 🔁 Salvar JSON com os dados do gráfico de autoavaliação por subdimensão
+
         dados_gerados = []
-        for _, row in resultado.iterrows():
-            dados_gerados.append({
-                "subdimensao": row["SUBDIMENSAO"],
-                "ideal": round(row["IDEAL_%"], 1),
-                "real": round(row["REAL_%"], 1),
-                "gap": round(row["IDEAL_%"] - row["REAL_%"], 1)
-            })
+
+        # Se for DataFrame:
+        if hasattr(resultado, "iterrows"):
+            for _, row in resultado.iterrows():
+                dados_gerados.append({
+                    "subdimensao": row["SUBDIMENSAO"],
+                    "ideal": round(row["IDEAL_%"], 1),
+                    "real": round(row["REAL_%"], 1),
+                    "gap": round(row["IDEAL_%"] - row["REAL_%"], 1)
+                })
+        # Se for lista de dicionários
+        elif isinstance(resultado, list):
+            for row in resultado:
+                dados_gerados.append({
+                    "subdimensao": row.get("SUBDIMENSAO", "-"),
+                    "ideal": round(row.get("IDEAL_%", 0), 1),
+                    "real": round(row.get("REAL_%", 0), 1),
+                    "gap": round(row.get("IDEAL_%", 0) - row.get("REAL_%", 0), 1)
+                })
 
         nome_base = nome_pdf.replace(".pdf", "")
         salvar_json_no_drive(dados_gerados, nome_base, service, id_lider)
+
 
 
         os.remove(caminho_pdf)
