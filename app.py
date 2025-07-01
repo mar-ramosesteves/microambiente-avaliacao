@@ -438,22 +438,7 @@ def salvar_grafico_autoavaliacao():
             metadata = {"name": nome_pdf, "parents": [id_lider]}
             service.files().create(body=metadata, media_body=media).execute()
 
-        # 🔁 Salvar JSON usado pela IA com prefixo "ia_"
-        try:
-            import json
-            from io import BytesIO
-            from googleapiclient.http import MediaIoBaseUpload
-
-            nome_base_ia = "ia_" + nome_pdf.replace(".pdf", "")
-            conteudo_bytes = BytesIO(json.dumps(dados_grafico, indent=2, ensure_ascii=False).encode("utf-8"))
-            media = MediaIoBaseUpload(conteudo_bytes, mimetype="application/json")
-
-            file_metadata = {"name": f"{nome_base_ia}.json", "parents": [id_lider]}
-            service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-            print(f"✅ JSON IA salvo como: {nome_base_ia}.json")
-        except Exception as e:
-            print(f"⚠️ Erro ao salvar JSON IA: {str(e)}")
+        
 
 
 
