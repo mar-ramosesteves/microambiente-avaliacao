@@ -438,36 +438,7 @@ def salvar_grafico_autoavaliacao():
             metadata = {"name": nome_pdf, "parents": [id_lider]}
             service.files().create(body=metadata, media_body=media).execute()
 
-                        # 🔁 Salvar JSON IA com os dados usados no gráfico
-        try:
-            import json as json_module  # garantir que não há conflito
-            from io import BytesIO
-            from googleapiclient.http import MediaIoBaseUpload
-
-            dados_ia = {
-                "empresa": empresa,
-                "codrodada": codrodada,
-                "emailLider": emailLider,
-                "tipo": "microambiente_autoavaliacao",
-                "dimensoes": list(resultado["DIMENSAO"]),
-                "ideal_percentual": list(resultado["IDEAL_%"]),
-                "real_percentual": list(resultado["REAL_%"]),
-                "n": numero_avaliacoes,
-                "titulo": "MICROAMBIENTE DE EQUIPES - DIMENSÕES"
-            }
-
-            nome_json = f"IA_{nome_pdf.replace('.pdf', '.json')}"
-            conteudo_bytes = BytesIO(json_module.dumps(dados_ia, indent=2, ensure_ascii=False).encode("utf-8"))
-            media_json = MediaIoBaseUpload(conteudo_bytes, mimetype="application/json")
-            metadata_json = {"name": nome_json, "parents": [id_lider]}
-            service.files().create(body=metadata_json, media_body=media_json, fields="id").execute()
-
-            print(f"✅ JSON IA salvo com sucesso: {nome_json}")
-        except Exception as e:
-            print(f"❌ Erro ao salvar JSON IA: {str(e)}")
-
-
-
+          
 
         os.remove(caminho_pdf)
         return jsonify({"mensagem": "✅ Gráfico gerado e salvo no Drive com sucesso."})
