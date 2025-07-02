@@ -192,10 +192,17 @@ def gerar_relatorio_microambiente():
         metadata = {"name": nome_arquivo, "parents": [id_lider]}
         service.files().create(body=metadata, media_body=media).execute()
 
+        # salvar também o JSON com prefixo IA_
+        nome_ia = "IA_" + nome_arquivo
+        media_ia = MediaIoBaseUpload(io.BytesIO(binario), mimetype="application/json")
+        metadata_ia = {"name": nome_ia, "parents": [id_lider]}
+        service.files().create(body=metadata_ia, media_body=media_ia).execute()
+
         return jsonify({"mensagem": "✅ Relatório consolidado salvo no Drive com sucesso."})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
 
 
 @app.route("/grafico-autoavaliacao", methods=["POST"])
