@@ -740,8 +740,17 @@ def salvar_grafico_media_equipe_dimensao():
             metadata = {"name": nome_pdf, "parents": [id_lider]}
             service.files().create(body=metadata, media_body=media).execute()
 
+        # Salvar também o JSON com prefixo IA_ na subpasta ia_json
+        dados_json = {
+            "titulo": "MÉDIA DA EQUIPE - DIMENSÕES",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
+        }
+        salvar_json_ia_no_drive(dados_json, nome_pdf, service, id_lider)
+
         os.remove(caminho_pdf)
         return jsonify({"mensagem": "✅ Gráfico da Média da Equipe gerado com sucesso."})
+
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
