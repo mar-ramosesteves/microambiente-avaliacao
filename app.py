@@ -1056,7 +1056,19 @@ def grafico_waterfall_gaps():
             fields="id"
         ).execute()
 
+        # Salvar também o JSON com prefixo IA_ na subpasta ia_json
+        dados_json = {
+            "titulo": "GAP MÉDIO POR DIMENSÃO E SUBDIMENSÃO",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
+            "dados": {
+                "dimensao": gap_dim.to_dict(orient="records"),
+                "subdimensao": gap_subdim.to_dict(orient="records")
+            }
+        }
+        salvar_json_ia_no_drive(dados_json, nome_arquivo, service, id_lider)
+
         return jsonify({"mensagem": f"✅ Gráfico salvo no Drive: {nome_arquivo}"}), 200
+
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
