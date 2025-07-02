@@ -1571,20 +1571,34 @@ def salvar_json_ia_no_drive(dados, nome_pdf, service, id_lider):
         import json
         from googleapiclient.http import MediaIoBaseUpload
 
-        # Prefixar com "ia_" e trocar extensão
-        nome_json = "ia_" + nome_pdf.replace(".pdf", ".json")
+        # Criar subpasta "ia_json" se não existir
+        query = f"'{id_lider}' in parents and name = 'ia_json' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        resposta = service.files().list(q=query, fields="files(id)").execute().get("files", [])
+        if resposta:
+            id_subpasta = resposta[0]["id"]
+        else:
+            pasta_metadata = {
+                "name": "ia_json",
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [id_lider]
+            }
+            id_subpasta = service.files().create(body=pasta_metadata, fields="id").execute()["id"]
+
+        # Prefixar com "IA_" e trocar extensão
+        nome_json = "IA_" + nome_pdf.replace(".pdf", ".json")
 
         # Converter os dados em bytes
         conteudo = BytesIO(json.dumps(dados, indent=2, ensure_ascii=False).encode("utf-8"))
         media = MediaIoBaseUpload(conteudo, mimetype="application/json")
 
-        # Enviar para o Google Drive
-        file_metadata = {"name": nome_json, "parents": [id_lider]}
+        # Enviar para subpasta "ia_json"
+        file_metadata = {"name": nome_json, "parents": [id_subpasta]}
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
         print(f"✅ JSON IA salvo com sucesso: {nome_json}")
     except Exception as e:
-        print(f"❌ Erro ao salvar JSON IA: {str(e)}")
+        print("❌ Erro ao salvar JSON IA:", str(e))
+
 
 
 
