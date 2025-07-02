@@ -886,8 +886,17 @@ def salvar_grafico_media_equipe_subdimensao():
             metadata = {"name": nome_pdf, "parents": [id_lider]}
             service.files().create(body=metadata, media_body=media).execute()
 
+        # Salvar também o JSON com prefixo IA_ na subpasta ia_json
+        dados_json = {
+            "titulo": "MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
+        }
+        salvar_json_ia_no_drive(dados_json, nome_pdf, service, id_lider)
+
         os.remove(caminho_pdf)
         return jsonify({"mensagem": "✅ Gráfico de subdimensões gerado com sucesso!"})
+
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
