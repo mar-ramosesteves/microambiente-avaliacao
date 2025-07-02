@@ -594,8 +594,17 @@ def salvar_grafico_autoavaliacao_subdimensao():
 
 
         
+        # Salvar também o JSON com prefixo IA_
+        dados_json = {
+            "titulo": "MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
+        }
+        salvar_json_ia_no_drive(dados_json, nome_pdf, service, id_lider)
+
         os.remove(caminho_pdf)
         return jsonify({"mensagem": "✅ Gráfico de subdimensões gerado e salvo no Drive com sucesso."})
+
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
