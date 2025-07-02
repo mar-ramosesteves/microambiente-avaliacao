@@ -1209,7 +1209,16 @@ def relatorio_gaps_por_questao():
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
+        # Salvar também o JSON com prefixo IA_ na subpasta ia_json
+        dados_json = {
+            "titulo": "ANÁLISE DE MICROAMBIENTE - GAP POR QUESTÃO",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
+            "dados": df[["QUESTAO", "DIMENSAO", "SUBDIMENSAO", "GAP", "AFIRMACAO"]].to_dict(orient="records")
+        }
+        salvar_json_ia_no_drive(dados_json, nome_arquivo, service, id_lider)
+
         return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_arquivo}"}), 200
+
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
