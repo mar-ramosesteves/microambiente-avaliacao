@@ -447,8 +447,17 @@ def salvar_grafico_autoavaliacao():
 
           
 
+        # Salvar também o JSON com prefixo IA_
+        dados_json = {
+            "titulo": "MICROAMBIENTE DE EQUIPES - DIMENSÕES",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
+        }
+        salvar_json_ia_no_drive(dados_json, nome_pdf, service, id_lider)
+
         os.remove(caminho_pdf)
         return jsonify({"mensagem": "✅ Gráfico gerado e salvo no Drive com sucesso."})
+
 
     except Exception as e:
         import traceback
