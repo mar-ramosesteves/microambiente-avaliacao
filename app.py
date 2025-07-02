@@ -1401,7 +1401,33 @@ def relatorio_analitico_microambiente():
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_pdf}"})
+                # Salvar também o JSON com prefixo IA_ na subpasta ia_json
+        id_pasta_ia = buscar_id("ia_json", id_lider)
+        if not id_pasta_ia:
+            pasta = service.files().create(
+                body={"name": "ia_json", "mimeType": "application/vnd.google-apps.folder", "parents": [id_lider]},
+                fields="id"
+            ).execute()
+            id_pasta_ia = pasta["id"]
+
+        dados_json = {
+            "titulo": "RELATÓRIO ANALÍTICO DE MICROAMBIENTE",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}",
+            "numeroAvaliacoes": num_avaliacoes,
+            "dados": registros
+        }
+
+        conteudo_json = json.dumps(dados_json, ensure_ascii=False, indent=2).encode("utf-8")
+        nome_json = f"IA_relatorio_analitico_microambiente_{emailLider}_{codrodada}.json"
+        media_json = MediaIoBaseUpload(io.BytesIO(conteudo_json), mimetype="application/json")
+        service.files().create(
+            body={"name": nome_json, "parents": [id_pasta_ia]},
+            media_body=media_json,
+            fields="id"
+        ).execute()
+
+        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_pdf}"}), 200
+
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
