@@ -179,32 +179,30 @@ def gerar_relatorio_microambiente():
 
         for arq in arquivos:
             nome = arq["name"]
+            
+            # ✅ Filtra só arquivos com "microambiente" no nome
             if "microambiente" not in nome.lower():
-                continue  # ignora arquivos que não sejam de microambiente
+                print("⏭️ Ignorado (nome não contém 'microambiente'):", nome)
+                continue
         
-            print("🧾 Lendo arquivo:", nome)
             arq_id = arq["id"]
-            req = service.files().get_media(fileId=arq_id, supportsAllDrives=True)
-        
-            fh = io.BytesIO()
-            downloader = MediaIoBaseDownload(fh, req)
-            done = False
-            while not done:
-                _, done = downloader.next_chunk()
-            fh.seek(0)
+            print("🧾 Lendo arquivo:", nome)
         
             try:
+                req = service.files().get_media(fileId=arq_id, supportsAllDrives=True)
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, req)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                fh.seek(0)
                 conteudo = json.load(fh)
             except Exception as e:
-                print(f"❌ Erro ao ler JSON do arquivo {nome}: {e}")
+                print(f"❌ Erro ao ler o JSON do arquivo '{nome}': {e}")
                 continue
         
             tipo = conteudo.get("tipo", "").lower()
             print("📄 Tipo detectado:", tipo)
-        
-            if not tipo.startswith("microambiente"):
-                print("⏭️ Ignorado (não é microambiente):", tipo)
-                continue
         
             if "auto" in tipo:
                 print("✅ Detectado como AUTOAVALIAÇÃO")
