@@ -176,7 +176,7 @@ def gerar_relatorio_microambiente():
 
         auto = None
         equipe = []
-
+        
         for arq in arquivos:
             nome = arq["name"]
             arq_id = arq["id"]
