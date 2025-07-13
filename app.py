@@ -174,29 +174,37 @@ def gerar_relatorio_microambiente():
             q=f"'{id_lider}' in parents and (mimeType='application/json' or mimeType='text/plain') and trashed = false",
             fields="files(id, name)").execute().get("files", [])
 
-        auto = None
-        equipe = []
 
+        
+        
         for arq in arquivos:
             nome = arq["name"]
             arq_id = arq["id"]
-            print("🧾 Lendo arquivo:", nome)
         
+            # 📌 PRINT 1: Nome e ID do arquivo
+            print("🧾 Lendo arquivo:", nome)
+            print("📎 ID:", arq_id)
+        
+            req = service.files().get_media(fileId=arq_id, supportsAllDrives=True)
+        
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, req)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+            fh.seek(0)
+            
             try:
-                req = service.files().get_media(fileId=arq_id, supportsAllDrives=True)
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
                 conteudo = json.load(fh)
             except Exception as e:
-                print(f"❌ Erro ao ler o JSON do arquivo '{nome}': {e}")
+                print(f"❌ Erro ao ler JSON do arquivo {nome}: {e}")
                 continue
         
             tipo = conteudo.get("tipo", "").lower()
+        
+            # 📌 PRINT 2: Tipo e chaves do JSON
             print("📄 Tipo detectado:", tipo)
+            print("📄 Chaves do JSON:", list(conteudo.keys()))
         
             if not tipo.startswith("microambiente"):
                 print("⏭️ Ignorado (não é microambiente):", tipo)
