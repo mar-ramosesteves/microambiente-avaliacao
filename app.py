@@ -137,14 +137,28 @@ def gerar_relatorio_microambiente():
         service = build('drive', 'v3', credentials=creds)
         PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
 
-        def buscar_id(nome_pasta, id_pai):
-            query = f"'{id_pai}' in parents and name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            resp = service.files().list(q=query, fields="files(id)").execute().get("files", [])
-            return resp[0]["id"] if resp else None
+        def buscar_id(service, parent_id, nome_pasta):
+            try:
+                query = f"'{parent_id}' in parents and name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                results = service.files().list(
+                    q=query,
+                    spaces='drive',
+                    fields='files(id, name)',
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True
+                ).execute()
+                items = results.get('files', [])
+                if items:
+                    return items[0]['id']
+                return None
+            except Exception as e:
+                print(f"Erro ao buscar pasta '{nome_pasta}': {str(e)}")
+                return None
 
-        id_empresa = buscar_id(empresa, PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada, id_empresa)
-        id_lider = buscar_id(emailLider, id_rodada)
+
+        id_empresa = buscar_id(service, PASTA_RAIZ, empresa)
+        id_rodada = buscar_id(service, id_empresa, codrodada)
+        id_lider = buscar_id(service, id_rodada, emailLider)
 
         if not id_lider:
             return jsonify({"erro": "Pasta do líder não encontrada"}), 404
