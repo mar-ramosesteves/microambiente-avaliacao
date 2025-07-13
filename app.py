@@ -209,9 +209,10 @@ def gerar_relatorio_microambiente():
             elif "equipe" in tipo:
                 print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
-                
+        
+        # ✅ Status final
         print("🔍 Total de avaliações de equipe:", len(equipe))
-        print("🔍 Autoavaliação presente:", "Sim" if auto else "Não")        
+        print("🔍 Autoavaliação presente:", "Sim" if auto else "Não")
 
 
 
