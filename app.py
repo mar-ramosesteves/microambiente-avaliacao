@@ -176,12 +176,9 @@ def gerar_relatorio_microambiente():
 
         auto = None
         equipe = []
-        
+
         for arq in arquivos:
             nome = arq["name"]
-            if "microambiente" not in nome.lower():
-                continue  # ignora arquivos que não sejam de microambiente
-        
             arq_id = arq["id"]
             print("🧾 Lendo arquivo:", nome)
         
@@ -205,15 +202,12 @@ def gerar_relatorio_microambiente():
                 print("⏭️ Ignorado (não é microambiente):", tipo)
                 continue
         
-            if tipo == "microambiente_autoavaliacao" and auto is None:
+            if "auto" in tipo:
                 print("✅ Detectado como AUTOAVALIAÇÃO")
                 auto = conteudo
-            elif tipo == "microambiente_equipe":
+            elif "equipe" in tipo:
                 print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
-        
-        print("🔍 Autoavaliação presente:", "Sim" if auto else "Não")
-        print("🔍 Total de avaliações de equipe:", len(equipe))
 
 
 
