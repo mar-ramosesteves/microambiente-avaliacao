@@ -122,9 +122,10 @@ def enviar_avaliacao():
 def gerar_relatorio_microambiente():
     try:
         dados = request.get_json()
-        empresa = dados.get("empresa")
-        codrodada = dados.get("codrodada")
-        emailLider = dados.get("emailLider")
+        empresa = dados.get("empresa", "").strip().lower()
+        codrodada = dados.get("codrodada", "").strip().lower()
+        emailLider = dados.get("emailLider", "").strip().lower()
+
 
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
@@ -157,11 +158,17 @@ def gerar_relatorio_microambiente():
 
 
         id_empresa = buscar_id(service, PASTA_RAIZ, empresa)
+        if not id_empresa:
+            return jsonify({"erro": f"Pasta da empresa '{empresa}' não encontrada."}), 404
+        
         id_rodada = buscar_id(service, id_empresa, codrodada)
+        if not id_rodada:
+            return jsonify({"erro": f"Pasta da rodada '{codrodada}' não encontrada."}), 404
+        
         id_lider = buscar_id(service, id_rodada, emailLider)
-
         if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada"}), 404
+            return jsonify({"erro": f"Pasta do líder '{emailLider}' não encontrada."}), 404
+
 
         arquivos = service.files().list(
             q=f"'{id_lider}' in parents and (mimeType='application/json' or mimeType='text/plain') and trashed = false",
