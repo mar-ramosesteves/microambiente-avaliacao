@@ -209,6 +209,10 @@ def gerar_relatorio_microambiente():
             elif "equipe" in tipo:
                 print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
+                
+        print("🔍 Total de avaliações de equipe:", len(equipe))
+        print("🔍 Autoavaliação presente:", "Sim" if auto else "Não")        
+
 
 
         relatorio = {
@@ -220,6 +224,10 @@ def gerar_relatorio_microambiente():
             "mensagem": "✅ Relatório consolidado microambiente gerado com sucesso"
         }
 
+        if not auto and not equipe:
+            return jsonify({"erro": "Nenhum dado de microambiente válido encontrado para consolidar."}), 400
+
+        
         nome_arquivo = f"relatorio_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         binario = json.dumps(relatorio, indent=2, ensure_ascii=False).encode("utf-8")
         media = MediaIoBaseUpload(io.BytesIO(binario), mimetype="application/json")
