@@ -180,7 +180,6 @@ def gerar_relatorio_microambiente():
         for arq in arquivos:
             nome = arq["name"]
             arq_id = arq["id"]
-            print("🧾 Lendo arquivo:", nome)
         
             try:
                 req = service.files().get_media(fileId=arq_id, supportsAllDrives=True)
@@ -191,28 +190,17 @@ def gerar_relatorio_microambiente():
                     _, done = downloader.next_chunk()
                 fh.seek(0)
                 conteudo = json.load(fh)
-            except Exception as e:
-                print(f"❌ Erro ao ler o JSON do arquivo '{nome}': {e}")
+            except:
                 continue
         
             tipo = conteudo.get("tipo", "").lower()
-            print("📄 Tipo detectado:", tipo)
-        
-            # ✅ FILTRO: apenas arquivos de microambiente
             if not tipo.startswith("microambiente"):
-                print("⏭️ Ignorado (não é microambiente):", tipo)
                 continue
         
             if "auto" in tipo:
-                print("✅ Detectado como AUTOAVALIAÇÃO")
                 auto = conteudo
             elif "equipe" in tipo:
-                print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
-        
-        # ✅ Status final
-        print("🔍 Total de avaliações de equipe:", len(equipe))
-        print("🔍 Autoavaliação presente:", "Sim" if auto else "Não")
 
 
 
