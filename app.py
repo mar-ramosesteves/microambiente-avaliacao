@@ -211,7 +211,12 @@ def gerar_relatorio_microambiente():
         binario = json.dumps(relatorio, indent=2, ensure_ascii=False).encode("utf-8")
         media = MediaIoBaseUpload(io.BytesIO(binario), mimetype="application/json")
         metadata = {"name": nome_arquivo, "parents": [id_lider]}
-        service.files().create(body=metadata, media_body=media).execute()
+        service.files().create(
+            body=metadata,
+            media_body=media,
+            supportsAllDrives=True  # ✅ ESSENCIAL NO DRIVE COMPARTILHADO
+        ).execute()
+
 
         
         return jsonify({"mensagem": "✅ Relatório consolidado salvo no Drive com sucesso."})
