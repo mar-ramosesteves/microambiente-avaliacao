@@ -179,12 +179,6 @@ def gerar_relatorio_microambiente():
 
         for arq in arquivos:
             nome = arq["name"]
-            
-            # ✅ Filtra só arquivos com "microambiente" no nome
-            if "microambiente" not in nome.lower():
-                print("⏭️ Ignorado (nome não contém 'microambiente'):", nome)
-                continue
-        
             arq_id = arq["id"]
             print("🧾 Lendo arquivo:", nome)
         
@@ -203,6 +197,11 @@ def gerar_relatorio_microambiente():
         
             tipo = conteudo.get("tipo", "").lower()
             print("📄 Tipo detectado:", tipo)
+        
+            # ✅ FILTRO: apenas arquivos de microambiente
+            if not tipo.startswith("microambiente"):
+                print("⏭️ Ignorado (não é microambiente):", tipo)
+                continue
         
             if "auto" in tipo:
                 print("✅ Detectado como AUTOAVALIAÇÃO")
