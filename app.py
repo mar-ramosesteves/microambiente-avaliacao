@@ -174,8 +174,8 @@ def gerar_relatorio_microambiente():
             q=f"'{id_lider}' in parents and (mimeType='application/json' or mimeType='text/plain') and trashed = false",
             fields="files(id, name)").execute().get("files", [])
 
-        auto = None
-        equipe = []
+        # auto = None
+        # equipe = []
         
         for arq in arquivos:
             nome = arq["name"]
