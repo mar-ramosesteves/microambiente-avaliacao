@@ -192,14 +192,20 @@ def gerar_relatorio_microambiente():
                 print(f"❌ Erro ao ler JSON do arquivo '{nome}': {e}")
                 continue
 
-            if "comoEsta" in conteudo and "comoDeveriaEstar" in conteudo:
-                print("✅ Detectado como AUTOAVALIAÇÃO")
+            tipo = conteudo.get("tipo", "").lower()
+            print("📄 Tipo detectado:", tipo)
+
+            if not auto and ("auto" in tipo or "comoEsta" in conteudo):
+                print("✅ Classificado como AUTOAVALIAÇÃO")
                 auto = conteudo
-            elif "avaliacoes" in conteudo:
-                print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
+            elif "avaliacoes" in conteudo or "equipe" in tipo:
+                print("✅ Classificado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
             else:
-                print("⏭️ Ignorado (estrutura inválida)")
+                print("⚠️ Estrutura desconhecida — mantido para inspeção manual")
+
+        if not auto and not equipe:
+            return jsonify({"erro": "Nenhum dado consolidável encontrado (nem autoavaliação nem equipe)."}), 400
 
         relatorio = {
             "empresa": empresa,
@@ -209,9 +215,6 @@ def gerar_relatorio_microambiente():
             "avaliacoesEquipe": equipe,
             "mensagem": "✅ Relatório consolidado microambiente gerado com sucesso"
         }
-
-        if not auto and not equipe:
-            return jsonify({"erro": "Nenhum dado de microambiente válido encontrado para consolidar."}), 400
 
         nome_arquivo = f"relatorio_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         binario = json.dumps(relatorio, indent=2, ensure_ascii=False).encode("utf-8")
