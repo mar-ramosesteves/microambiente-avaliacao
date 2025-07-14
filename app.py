@@ -138,21 +138,16 @@ def gerar_relatorio_microambiente():
         PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
 
         def buscar_id(service, parent_id, nome_pasta):
-            try:
-                query = f"'{parent_id}' in parents and name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-                results = service.files().list(
-                    q=query,
-                    spaces='drive',
-                    fields='files(id, name)',
-                    includeItemsFromAllDrives=True,
-                    supportsAllDrives=True
-                ).execute()
-                items = results.get('files', [])
-                if items:
-                    return items[0]['id']
-                return None
-            except Exception as e:
-                return None
+            query = f"'{parent_id}' in parents and name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = service.files().list(
+                q=query,
+                spaces='drive',
+                fields='files(id, name)',
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True
+            ).execute()
+            items = results.get('files', [])
+            return items[0]['id'] if items else None
 
         id_empresa = buscar_id(service, PASTA_RAIZ, empresa)
         if not id_empresa:
@@ -168,40 +163,43 @@ def gerar_relatorio_microambiente():
 
         arquivos = service.files().list(
             q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)").execute().get("files", [])
+            fields="files(id, name)"
+        ).execute().get("files", [])
 
-        todos = []
+        auto = None
+        equipe = []
 
         for arq in arquivos:
             nome = arq["name"]
             arq_id = arq["id"]
-            print("🧾 Lendo arquivo:", nome)
+
+            # Baixa direto sem usar stream
             try:
-                req = service.files().get_media(fileId=arq_id, supportsAllDrives=True)
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
-                conteudo = json.loads(fh.read().decode("utf-8"))
-                todos.append({"nome_arquivo": nome, "conteudo": conteudo})
+                conteudo_bytes = service.files().get(fileId=arq_id, supportsAllDrives=True, alt="media").execute()
+                conteudo = json.loads(conteudo_bytes.decode("utf-8"))
             except Exception as e:
                 print(f"❌ Erro ao ler arquivo '{nome}': {e}")
-                todos.append({"nome_arquivo": nome, "erro": str(e)})
+                continue
 
-        if not todos:
-            return jsonify({"erro": "Nenhum conteúdo lido dos arquivos JSON da pasta."}), 400
+            tipo = conteudo.get("tipo", "").lower()
+            if tipo == "microambiente_autoavaliacao" and not auto:
+                auto = conteudo
+            elif tipo == "microambiente_equipe":
+                equipe.append(conteudo)
+
+        if not auto and not equipe:
+            return jsonify({"erro": "Nenhum dado consolidável encontrado (nem autoavaliação nem equipe)."}), 400
 
         relatorio = {
             "empresa": empresa,
             "codrodada": codrodada,
             "emailLider": emailLider,
-            "arquivosLidos": todos,
-            "mensagem": "✅ Relatório bruto de leitura gerado com sucesso"
+            "autoavaliacao": auto,
+            "avaliacoesEquipe": equipe,
+            "mensagem": "✅ Relatório consolidado microambiente gerado com sucesso"
         }
 
-        nome_arquivo = f"debug_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        nome_arquivo = f"relatorio_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         binario = json.dumps(relatorio, indent=2, ensure_ascii=False).encode("utf-8")
         media = MediaIoBaseUpload(io.BytesIO(binario), mimetype="application/json")
         metadata = {"name": nome_arquivo, "parents": [id_lider]}
@@ -211,7 +209,7 @@ def gerar_relatorio_microambiente():
             supportsAllDrives=True
         ).execute()
 
-        return jsonify({"mensagem": "✅ Diagnóstico salvo no Drive com sucesso."})
+        return jsonify({"mensagem": "✅ Relatório consolidado salvo no Drive com sucesso."})
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
