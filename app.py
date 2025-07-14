@@ -126,7 +126,6 @@ def gerar_relatorio_microambiente():
         codrodada = dados.get("codrodada", "").strip().lower()
         emailLider = dados.get("emailLider", "").strip().lower()
 
-
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
@@ -156,33 +155,30 @@ def gerar_relatorio_microambiente():
                 print(f"Erro ao buscar pasta '{nome_pasta}': {str(e)}")
                 return None
 
-
         id_empresa = buscar_id(service, PASTA_RAIZ, empresa)
         if not id_empresa:
             return jsonify({"erro": f"Pasta da empresa '{empresa}' não encontrada."}), 404
-        
+
         id_rodada = buscar_id(service, id_empresa, codrodada)
         if not id_rodada:
             return jsonify({"erro": f"Pasta da rodada '{codrodada}' não encontrada."}), 404
-        
+
         id_lider = buscar_id(service, id_rodada, emailLider)
         if not id_lider:
             return jsonify({"erro": f"Pasta do líder '{emailLider}' não encontrada."}), 404
 
-
         arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and (mimeType='application/json' or mimeType='text/plain') and trashed = false",
+            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
             fields="files(id, name)").execute().get("files", [])
 
         auto = None
         equipe = []
-        
-        
+
         for arq in arquivos:
             nome = arq["name"]
             arq_id = arq["id"]
             print("🧾 Lendo arquivo:", nome)
-        
+
             try:
                 req = service.files().get_media(fileId=arq_id, supportsAllDrives=True)
                 fh = io.BytesIO()
@@ -195,20 +191,15 @@ def gerar_relatorio_microambiente():
             except Exception as e:
                 print(f"❌ Erro ao ler JSON do arquivo '{nome}': {e}")
                 continue
-        
-            tipo = conteudo.get("tipo", "").lower()
-            print("📄 Tipo detectado:", tipo)
-        
-            if tipo == "microambiente_autoavaliacao":
+
+            if "comoEsta" in conteudo and "comoDeveriaEstar" in conteudo:
                 print("✅ Detectado como AUTOAVALIAÇÃO")
                 auto = conteudo
-            elif tipo == "microambiente_equipe":
+            elif "avaliacoes" in conteudo:
                 print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
             else:
-                print("⏭️ Ignorado (tipo inválido):", tipo)
-
-
+                print("⏭️ Ignorado (estrutura inválida)")
 
         relatorio = {
             "empresa": empresa,
@@ -222,7 +213,6 @@ def gerar_relatorio_microambiente():
         if not auto and not equipe:
             return jsonify({"erro": "Nenhum dado de microambiente válido encontrado para consolidar."}), 400
 
-        
         nome_arquivo = f"relatorio_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         binario = json.dumps(relatorio, indent=2, ensure_ascii=False).encode("utf-8")
         media = MediaIoBaseUpload(io.BytesIO(binario), mimetype="application/json")
@@ -230,11 +220,9 @@ def gerar_relatorio_microambiente():
         service.files().create(
             body=metadata,
             media_body=media,
-            supportsAllDrives=True  # ✅ ESSENCIAL NO DRIVE COMPARTILHADO
+            supportsAllDrives=True
         ).execute()
 
-
-        
         return jsonify({"mensagem": "✅ Relatório consolidado salvo no Drive com sucesso."})
 
     except Exception as e:
