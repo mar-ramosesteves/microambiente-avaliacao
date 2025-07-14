@@ -185,23 +185,24 @@ def gerar_relatorio_microambiente():
                 downloader = MediaIoBaseDownload(fh, req)
                 done = False
                 while not done:
-                    status, done = downloader.next_chunk()
+                    _, done = downloader.next_chunk()
                 fh.seek(0)
                 conteudo = json.loads(fh.read().decode("utf-8"))
-
             except Exception as e:
                 print(f"❌ Erro ao ler JSON do arquivo '{nome}': {e}")
                 continue
 
-            # DETECÇÃO BASEADA NA SUA ESTRUTURA
-            if "Q01C" in conteudo and "Q01k" in conteudo and not auto:
-                print("✅ Classificado como AUTOAVALIAÇÃO (padrão HR Key)")
+            tipo = conteudo.get("tipo", "").lower()
+            print("📄 Tipo detectado:", tipo)
+
+            if tipo == "microambiente_autoavaliacao" and not auto:
+                print("✅ Detectado como AUTOAVALIAÇÃO")
                 auto = conteudo
-            elif "avaliacoes" in conteudo:
-                print("✅ Classificado como AVALIAÇÃO DE EQUIPE (padrão HR Key)")
+            elif tipo == "microambiente_equipe":
+                print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
             else:
-                print("⚠️ Ignorado - estrutura desconhecida")
+                print("⏭️ Ignorado (tipo inválido):", tipo)
 
         if not auto and not equipe:
             return jsonify({"erro": "Nenhum dado consolidável encontrado (nem autoavaliação nem equipe)."}), 400
