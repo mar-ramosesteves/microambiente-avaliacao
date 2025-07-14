@@ -193,7 +193,11 @@ def gerar_relatorio_microambiente():
                 continue
 
             tipo = conteudo.get("tipo", "").lower()
-            print("📄 Tipo detectado:", tipo)
+
+            # ⛔ IGNORA qualquer arquivo que não seja de microambiente
+            if "microambiente" not in tipo:
+                print("⏭️ Ignorado (tipo não é microambiente):", tipo)
+                continue
 
             if tipo == "microambiente_autoavaliacao" and not auto:
                 print("✅ Detectado como AUTOAVALIAÇÃO")
@@ -201,8 +205,6 @@ def gerar_relatorio_microambiente():
             elif tipo == "microambiente_equipe":
                 print("✅ Detectado como AVALIAÇÃO DE EQUIPE")
                 equipe.append(conteudo)
-            else:
-                print("⏭️ Ignorado (tipo inválido):", tipo)
 
         if not auto and not equipe:
             return jsonify({"erro": "Nenhum dado consolidável encontrado (nem autoavaliação nem equipe)."}), 400
