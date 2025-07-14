@@ -185,9 +185,10 @@ def gerar_relatorio_microambiente():
                 downloader = MediaIoBaseDownload(fh, req)
                 done = False
                 while not done:
-                    _, done = downloader.next_chunk()
+                    status, done = downloader.next_chunk()
                 fh.seek(0)
-                conteudo = json.load(fh)
+                conteudo = json.loads(fh.read().decode("utf-8"))
+
             except Exception as e:
                 print(f"❌ Erro ao ler JSON do arquivo '{nome}': {e}")
                 continue
