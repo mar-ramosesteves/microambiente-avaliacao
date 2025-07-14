@@ -192,17 +192,15 @@ def gerar_relatorio_microambiente():
                 print(f"❌ Erro ao ler JSON do arquivo '{nome}': {e}")
                 continue
 
-            tipo = conteudo.get("tipo", "").lower()
-            print("📄 Tipo detectado:", tipo)
-
-            if not auto and ("auto" in tipo or "comoEsta" in conteudo):
-                print("✅ Classificado como AUTOAVALIAÇÃO")
+            # DETECÇÃO BASEADA NA SUA ESTRUTURA
+            if "Q01C" in conteudo and "Q01k" in conteudo and not auto:
+                print("✅ Classificado como AUTOAVALIAÇÃO (padrão HR Key)")
                 auto = conteudo
-            elif "avaliacoes" in conteudo or "equipe" in tipo:
-                print("✅ Classificado como AVALIAÇÃO DE EQUIPE")
+            elif "avaliacoes" in conteudo:
+                print("✅ Classificado como AVALIAÇÃO DE EQUIPE (padrão HR Key)")
                 equipe.append(conteudo)
             else:
-                print("⚠️ Estrutura desconhecida — mantido para inspeção manual")
+                print("⚠️ Ignorado - estrutura desconhecida")
 
         if not auto and not equipe:
             return jsonify({"erro": "Nenhum dado consolidável encontrado (nem autoavaliação nem equipe)."}), 400
