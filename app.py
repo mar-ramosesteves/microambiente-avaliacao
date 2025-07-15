@@ -22,9 +22,7 @@ def aplicar_cors(response):
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
-@app.route("/enviar-avaliacao", methods=["OPTIONS"])
-def preflight():
-    return '', 200
+
 
 # Carregar planilhas
 tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
@@ -95,8 +93,12 @@ def avaliar():
         "subdimensoes": resultado_sub
     })
 
-@app.route("/enviar-avaliacao", methods=["POST"])
+@app.route("/enviar-avaliacao", methods=["POST", "OPTIONS"])
+
 def enviar_avaliacao():
+    if request.method == "OPTIONS":
+        return '', 200
+
     import datetime
     import requests
 
