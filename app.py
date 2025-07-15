@@ -129,7 +129,7 @@ def enviar_avaliacao():
         }
 
         # Payload para Supabase
-        registro = {
+        registro = { 
             "empresa": empresa,
             "codrodada": codrodada,
             "emailLider": emailLider,
@@ -143,9 +143,15 @@ def enviar_avaliacao():
             "sexo": dados.get("sexo", "").strip().lower(),
             "etnia": dados.get("etnia", "").strip().lower(),
             "data": dados.get("data", "").strip(),  # data do preenchimento
+            "name": dados.get("name", "").strip(),
+            "cargo": dados.get("cargo", "").strip(),
+            "area": dados.get("area", "").strip(),
+            "cidade": dados.get("cidade", "").strip(),
+            "pais": dados.get("pais", "").strip(),
             "data_criacao": datetime.datetime.now().isoformat(),
-            "dados_json": dados
+            "dados_json": dados  # backup completo
         }
+
 
 
         # Envio para Supabase
