@@ -144,10 +144,12 @@ def enviar_avaliacao():
             print("✅ Avaliação salva no Supabase com sucesso!")
             return jsonify({"status": "✅ Microambiente de Equipes → salvo no banco de dados"}), 200
         else:
-            print("❌ Erro Supabase:", resposta.status_code, resposta.text, resposta.json())
-
-
-            return jsonify({"erro": "Erro ao salvar no banco de dados"}), 500
+            print("❌ Erro Supabase:", resposta.status_code)
+            try:
+                print("❌ Corpo da resposta:", resposta.json())
+            except:
+                print("❌ Corpo da resposta (raw):", resposta.text)
+            return jsonify({"erro": resposta.text}), 500
 
     except Exception as e:
         print("❌ Erro ao processar dados:", str(e))
