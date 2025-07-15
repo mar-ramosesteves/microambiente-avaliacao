@@ -134,9 +134,19 @@ def enviar_avaliacao():
             "codrodada": codrodada,
             "emailLider": emailLider,
             "tipo": tipo,
+            "nome": dados.get("nome", "").strip(),
+            "email": dados.get("email", "").strip().lower(),
+            "nomeLider": dados.get("nomeLider", "").strip(),
+            "departamento": dados.get("departamento", "").strip(),
+            "estado": dados.get("estado", "").strip(),
+            "nascimento": dados.get("nascimento", "").strip(),
+            "sexo": dados.get("sexo", "").strip().lower(),
+            "etnia": dados.get("etnia", "").strip().lower(),
+            "data": dados.get("data", "").strip(),  # data do preenchimento
             "data_criacao": datetime.datetime.now().isoformat(),
-            "dados_json": dados  # aqui vai o JSON completo recebido do formulário
+            "dados_json": dados
         }
+
 
         # Envio para Supabase
         print("📦 Registro sendo enviado ao Supabase:")
