@@ -110,7 +110,7 @@ def enviar_avaliacao():
 
     try:
         # Dados principais
-        empresa = dados.get("company", "").strip().lower()
+        empresa = dados.get("empresa", "").strip().lower()
         codrodada = dados.get("codrodada", "").strip().lower()
         emailLider = dados.get("emailLider", "").strip().lower()
         tipo = dados.get("tipo", "").strip().lower()
