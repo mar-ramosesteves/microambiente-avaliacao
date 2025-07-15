@@ -143,7 +143,6 @@ def enviar_avaliacao():
             "sexo": dados.get("sexo", "").strip().lower(),
             "etnia": dados.get("etnia", "").strip().lower(),
             "data": dados.get("data", "").strip(),  # data do preenchimento
-            "name": dados.get("name", "").strip(),
             "cargo": dados.get("cargo", "").strip(),
             "area": dados.get("area", "").strip(),
             "cidade": dados.get("cidade", "").strip(),
