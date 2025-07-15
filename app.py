@@ -139,8 +139,13 @@ def enviar_avaliacao():
         }
 
         # Envio para Supabase
-        resposta = requests.post(url_supabase, headers=headers, json=registro)
+        print("📦 Registro sendo enviado ao Supabase:")
+        print(json.dumps(registro, indent=2, ensure_ascii=False))
 
+        resposta = requests.post(url_supabase, headers=headers, json=registro)
+        
+
+        
         if resposta.status_code == 201:
             print("✅ Avaliação salva no Supabase com sucesso!")
             return jsonify({"status": "✅ Microambiente de Equipes → salvo no banco de dados"}), 200
