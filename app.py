@@ -144,7 +144,8 @@ def enviar_avaliacao():
             print("✅ Avaliação salva no Supabase com sucesso!")
             return jsonify({"status": "✅ Microambiente de Equipes → salvo no banco de dados"}), 200
         else:
-            print("❌ Erro Supabase:", resposta.status_code, resposta.text)
+            print("❌ Erro Supabase:", resposta.status_code, resposta.text, resposta.json())
+
 
             return jsonify({"erro": "Erro ao salvar no banco de dados"}), 500
 
