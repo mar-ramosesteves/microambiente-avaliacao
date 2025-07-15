@@ -97,121 +97,56 @@ def avaliar():
 
 @app.route("/enviar-avaliacao", methods=["POST"])
 def enviar_avaliacao():
+    import datetime
+    import requests
+
     dados = request.get_json()
     if not dados:
         return jsonify({"erro": "Nenhum dado recebido"}), 400
 
     print("✅ Dados recebidos:", dados)
 
-    url_script = "https://script.google.com/macros/s/AKfycbzrKBSwgRf9ckJrBDRkC1VsDibhYrWTJkLPhVMt83x_yCXnd_ex_CYuehT8pioTFvbxsw/exec"
-
     try:
-        resposta = requests.post(url_script, json=dados)
-        if resposta.status_code == 200:
-            print("✅ Avaliação salva no Drive com sucesso!")
-            return jsonify({"status": "✅ Microambiente de Equipes → salva no Drive"}), 200
-        else:
-            print("❌ Erro ao salvar no Drive:", resposta.text)
-            return jsonify({"erro": "Erro ao salvar no Drive"}), 500
-    except Exception as e:
-        print("❌ Erro ao enviar dados:", str(e))
-        return jsonify({"erro": str(e)}), 500
-
-# 🔽 NOVA ROTA DE RELATÓRIO CONSOLIDADO DE MICROAMBIENTE
-@app.route("/gerar-relatorio-microambiente", methods=["POST"])
-def gerar_relatorio_microambiente():
-    try:
-        dados = request.get_json()
-        empresa = dados.get("empresa", "").strip().lower()
+        # Dados principais
+        empresa = dados.get("company", "").strip().lower()
         codrodada = dados.get("codrodada", "").strip().lower()
         emailLider = dados.get("emailLider", "").strip().lower()
+        tipo = dados.get("tipo", "").strip().lower()
 
-        if not all([empresa, codrodada, emailLider]):
+        if not all([empresa, codrodada, emailLider, tipo]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-            scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=creds)
-        PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
+        # Supabase: URL e headers
+        url_supabase = "https://xmsjjknpnowsswwrbvpc.supabase.co/rest/v1/microambiente"
+        headers = {
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhtc2pqa25wbm93c3N3d3JidnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI1MDg0NDUsImV4cCI6MjA2ODA4NDQ0NX0.OexXJX7lK_DefGb72VDWGLDcUXamoQIgYOv5Zo_e9L4",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhtc2pqa25wbm93c3N3d3JidnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI1MDg0NDUsImV4cCI6MjA2ODA4NDQ0NX0.OexXJX7lK_DefGb72VDWGLDcUXamoQIgYOv5Zo_e9L4",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation"
+        }
 
-        def buscar_id(service, parent_id, nome_pasta):
-            query = f"'{parent_id}' in parents and name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = service.files().list(
-                q=query,
-                spaces='drive',
-                fields='files(id, name)',
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True
-            ).execute()
-            items = results.get('files', [])
-            return items[0]['id'] if items else None
-
-        id_empresa = buscar_id(service, PASTA_RAIZ, empresa)
-        if not id_empresa:
-            return jsonify({"erro": f"Pasta da empresa '{empresa}' não encontrada."}), 404
-
-        id_rodada = buscar_id(service, id_empresa, codrodada)
-        if not id_rodada:
-            return jsonify({"erro": f"Pasta da rodada '{codrodada}' não encontrada."}), 404
-
-        id_lider = buscar_id(service, id_rodada, emailLider)
-        if not id_lider:
-            return jsonify({"erro": f"Pasta do líder '{emailLider}' não encontrada."}), 404
-
-        arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)"
-        ).execute().get("files", [])
-
-        auto = None
-        equipe = []
-
-        for arq in arquivos:
-            nome = arq["name"]
-            arq_id = arq["id"]
-
-            # Baixa direto sem usar stream
-            try:
-                conteudo_bytes = service.files().get(fileId=arq_id, supportsAllDrives=True, alt="media").execute()
-                conteudo = json.loads(conteudo_bytes.decode("utf-8"))
-            except Exception as e:
-                print(f"❌ Erro ao ler arquivo '{nome}': {e}")
-                continue
-
-            tipo = conteudo.get("tipo", "").lower()
-            if tipo == "microambiente_autoavaliacao" and not auto:
-                auto = conteudo
-            elif tipo == "microambiente_equipe":
-                equipe.append(conteudo)
-
-        if not auto and not equipe:
-            return jsonify({"erro": "Nenhum dado consolidável encontrado (nem autoavaliação nem equipe)."}), 400
-
-        relatorio = {
+        # Payload para Supabase
+        registro = {
             "empresa": empresa,
             "codrodada": codrodada,
             "emailLider": emailLider,
-            "autoavaliacao": auto,
-            "avaliacoesEquipe": equipe,
-            "mensagem": "✅ Relatório consolidado microambiente gerado com sucesso"
+            "tipo": tipo,
+            "data_criacao": datetime.datetime.now().isoformat(),
+            "dados_json": dados  # aqui vai o JSON completo recebido do formulário
         }
 
-        nome_arquivo = f"relatorio_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        binario = json.dumps(relatorio, indent=2, ensure_ascii=False).encode("utf-8")
-        media = MediaIoBaseUpload(io.BytesIO(binario), mimetype="application/json")
-        metadata = {"name": nome_arquivo, "parents": [id_lider]}
-        service.files().create(
-            body=metadata,
-            media_body=media,
-            supportsAllDrives=True
-        ).execute()
+        # Envio para Supabase
+        resposta = requests.post(url_supabase, headers=headers, json=registro)
 
-        return jsonify({"mensagem": "✅ Relatório consolidado salvo no Drive com sucesso."})
+        if resposta.status_code == 201:
+            print("✅ Avaliação salva no Supabase com sucesso!")
+            return jsonify({"status": "✅ Microambiente de Equipes → salvo no banco de dados"}), 200
+        else:
+            print("❌ Erro Supabase:", resposta.text)
+            return jsonify({"erro": "Erro ao salvar no banco de dados"}), 500
 
     except Exception as e:
+        print("❌ Erro ao processar dados:", str(e))
         return jsonify({"erro": str(e)}), 500
 
 
