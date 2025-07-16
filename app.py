@@ -1667,3 +1667,71 @@ def salvar_json_ia_no_drive(dados, nome_pdf, service, id_lider):
 
 
 
+@app.route("/salvar-consolidado-microambiente", methods=["POST"])
+def salvar_consolidado_microambiente():
+    try:
+        import requests
+        from datetime import datetime
+
+        dados = request.get_json()
+        empresa = dados.get("empresa", "").strip().lower()
+        codrodada = dados.get("codrodada", "").strip().lower()
+        emailLider = dados.get("emailLider", "").strip().lower()
+
+        if not all([empresa, codrodada, emailLider]):
+            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+
+        print(f"✅ Dados recebidos: {empresa} {codrodada} {emailLider}")
+        print("🔁 Iniciando chamada ao Supabase com os dados validados...")
+
+        url_base = os.environ.get("SUPABASE_REST_URL")
+        headers = {
+            "apikey": os.environ.get("SUPABASE_API_KEY"),
+            "Authorization": f"Bearer {os.environ.get('SUPABASE_API_KEY')}",
+            "Content-Type": "application/json"
+        }
+
+        # Buscar autoavaliação
+        filtro_auto = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_autoavaliacao"
+        resposta_auto = requests.get(f"{url_base}/relatorios_microambiente{filtro_auto}", headers=headers)
+        auto_data = resposta_auto.json()
+
+        # Buscar avaliações de equipe
+        filtro_equipe = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_equipe"
+        resposta_equipe = requests.get(f"{url_base}/relatorios_microambiente{filtro_equipe}", headers=headers)
+        equipe_data = resposta_equipe.json()
+
+        print(f"📥 Resultado da requisição AUTO: {auto_data}")
+        print(f"📥 Resultado da requisição EQUIPE: {equipe_data}")
+
+        if not auto_data:
+            return jsonify({"erro": "Nenhuma autoavaliação encontrada."}), 404
+        if not equipe_data:
+            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 404
+
+        autoavaliacao = auto_data[0]["dados_json"]
+        avaliacoesEquipe = [item["dados_json"] for item in equipe_data]
+
+        consolidado = {
+            "empresa": empresa,
+            "codrodada": codrodada,
+            "emailLider": emailLider,
+            "autoavaliacao": autoavaliacao,
+            "avaliacoesEquipe": avaliacoesEquipe,
+            "data_criacao": datetime.utcnow().isoformat(),
+            "nome_arquivo": f"consolidado_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        }
+
+        salvar_url = f"{url_base}/consolidado_microambiente"
+        resposta_salvar = requests.post(salvar_url, headers=headers, data=json.dumps(consolidado))
+
+        if resposta_salvar.status_code not in [200, 201]:
+            print(f"❌ Erro ao salvar no Supabase: {resposta_salvar.text}")
+            return jsonify({"erro": "Falha ao salvar consolidado."}), 500
+
+        print("✅ Consolidado salvo com sucesso.")
+        return jsonify({"mensagem": "Consolidado salvo com sucesso."})
+
+    except Exception as e:
+        print(f"Erro ao salvar consolidado: {e}")
+        return jsonify({"erro": "Erro interno ao processar consolidado."}), 500
