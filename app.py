@@ -1720,9 +1720,12 @@ def salvar_consolidado_microambiente():
             "empresa": empresa,
             "codrodada": codrodada,
             "emailLider": emailLider,
-            "autoavaliacao": autoavaliacao,
-            "avaliacoesEquipe": avaliacoesEquipe,
+            
             "data_criacao": datetime.utcnow().isoformat(),
+            "dados_json": {
+                "autoavaliacao": autoavaliacao,
+                "avaliacoesEquipe": avaliacoes_equipe
+            },
             "nome_arquivo": f"consolidado_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         }
 
