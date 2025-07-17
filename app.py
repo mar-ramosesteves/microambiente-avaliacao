@@ -1729,16 +1729,22 @@ def salvar_consolidado_microambiente():
             "nome_arquivo": f"consolidado_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         }
 
-        salvar_url = f"{url_base}/consolidado_microambiente"
-        resposta_salvar = requests.post(salvar_url, headers=headers, data=json.dumps(consolidado))
+        url_base = os.environ.get("SUPABASE_REST_URL")
+        headers = {
+            "apikey": os.environ.get("SUPABASE_API_KEY"),
+            "Content-Type": "application/json"
+        }
 
-        if resposta_salvar.status_code not in [200, 201]:
-            print(f"❌ Erro ao salvar no Supabase: {resposta_salvar.text}")
-            return jsonify({"erro": "Falha ao salvar consolidado."}), 500
+        resposta = requests.post(
+            f"{url_base}/consolidado_microambiente",
+            headers=headers,
+            json=consolidado
+        )
 
-        print("✅ Consolidado salvo com sucesso.")
-        return jsonify({"mensagem": "Consolidado salvo com sucesso."})
+        if resposta.status_code == 201:
+            print("✅ Consolidado salvo com sucesso no Supabase!")
+            return jsonify({"mensagem": "Consolidado salvo com sucesso."})
+        else:
+            print("❌ Erro ao salvar no Supabase:", resposta.text)
+            return jsonify({"erro": "Erro ao salvar no Supabase."}), 500
 
-    except Exception as e:
-        print(f"Erro ao salvar consolidado: {e}")
-        return jsonify({"erro": "Erro interno ao processar consolidado."}), 500
