@@ -1668,6 +1668,8 @@ def salvar_json_ia_no_drive(dados, nome_pdf, service, id_lider):
 
 
 @app.route("/salvar-consolidado-microambiente", methods=["POST"])
+@cross_origin(origin='https://gestor.thehrkey.tech')
+
 def salvar_consolidado_microambiente():
     try:
         import requests
