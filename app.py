@@ -1690,8 +1690,8 @@ def salvar_consolidado_microambiente():
 
         url_base = os.environ.get("SUPABASE_REST_URL")
         headers = {
-            "apikey": os.environ.get("SUPABASE_API_KEY"),
-            "Authorization": f"Bearer {os.environ.get('SUPABASE_API_KEY')}",
+            "apikey": os.environ.get("SUPABASE_KEY"),
+            "Authorization": f"Bearer {os.environ.get('SUPABASE_KEY')}",
             "Content-Type": "application/json"
         }
 
