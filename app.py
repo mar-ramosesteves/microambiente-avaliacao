@@ -1670,8 +1670,6 @@ def salvar_json_ia_no_drive(dados, nome_pdf, service, id_lider):
 
 
 @app.route("/salvar-consolidado-microambiente", methods=["POST"])
-@cross_origin(origin='https://gestor.thehrkey.tech')
-
 def salvar_consolidado_microambiente():
     try:
         import requests
@@ -1682,69 +1680,71 @@ def salvar_consolidado_microambiente():
         codrodada = dados.get("codrodada", "").strip().lower()
         emailLider = dados.get("emailLider", "").strip().lower()
 
-        if not all([empresa, codrodada, emailLider]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
-
         print(f"✅ Dados recebidos: {empresa} {codrodada} {emailLider}")
         print("🔁 Iniciando chamada ao Supabase com os dados validados...")
 
-        url_base = os.environ.get("SUPABASE_REST_URL")
+        supabase_url = os.environ.get("SUPABASE_REST_URL")
+        supabase_key = os.environ.get("SUPABASE_KEY")
+
         headers = {
-            "apikey": os.environ.get("SUPABASE_KEY"),
-            "Authorization": f"Bearer {os.environ.get('SUPABASE_KEY')}",
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
             "Content-Type": "application/json"
         }
 
-        # Buscar autoavaliação
-        filtro_auto = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_autoavaliacao"
-        resposta_auto = requests.get(f"{url_base}/relatorios_microambiente{filtro_auto}", headers=headers)
-        auto_data = resposta_auto.json()
-
-        # Buscar avaliações de equipe
-        filtro_equipe = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_equipe"
-        resposta_equipe = requests.get(f"{url_base}/relatorios_microambiente{filtro_equipe}", headers=headers)
-        equipe_data = resposta_equipe.json()
-
-        print(f"📥 Resultado da requisição AUTO: {auto_data}")
-        print(f"📥 Resultado da requisição EQUIPE: {equipe_data}")
+        # 🔍 Buscar autoavaliação
+        filtro_auto = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=ilike.microambiente_autoavaliacao"
+        url_auto = f"{supabase_url}/relatorios_microambiente{filtro_auto}"
+        resp_auto = requests.get(url_auto, headers=headers)
+        auto_data = resp_auto.json()
+        print("📥 Resultado da requisição AUTO:", auto_data)
 
         if not auto_data:
-            return jsonify({"erro": "Nenhuma autoavaliação encontrada."}), 404
-        if not equipe_data:
-            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 404
+            print("❌ microambiente_autoavaliacao não encontrada.")
+            return jsonify({"erro": "microambiente_autoavaliacao não encontrada."}), 404
 
         autoavaliacao = auto_data[0]["dados_json"]
-        avaliacoesEquipe = [item["dados_json"] for item in equipe_data]
 
+        # 🔍 Buscar avaliações de equipe
+        filtro_equipe = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_equipe"
+        url_equipe = f"{supabase_url}/relatorios_microambiente{filtro_equipe}"
+        resp_equipe = requests.get(url_equipe, headers=headers)
+        equipe_data = resp_equipe.json()
+        print("📥 Resultado da requisição EQUIPE:", equipe_data)
+
+        avaliacoes_equipe = [r["dados_json"] for r in equipe_data if "dados_json" in r]
+
+        if not avaliacoes_equipe:
+            print("❌ Nenhuma avaliação de equipe encontrada.")
+            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 404
+
+        # 🧩 Montar JSON final
         consolidado = {
+            "autoavaliacao": autoavaliacao,
+            "avaliacoesEquipe": avaliacoes_equipe
+        }
+
+        # 💾 Salvar na tabela final
+        payload = {
             "empresa": empresa,
             "codrodada": codrodada,
-            "emailLider": emailLider,
-            
+            "emaillider": emailLider,
+            "dados_json": consolidado,
             "data_criacao": datetime.utcnow().isoformat(),
-            "dados_json": {
-                "autoavaliacao": autoavaliacao,
-                "avaliacoesEquipe": avaliacoes_equipe
-            },
-            "nome_arquivo": f"consolidado_microambiente_{emailLider}_{codrodada}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            "nome_arquivo": f"consolidado_{empresa}_{codrodada}_{emailLider}.json".lower()
         }
 
-        url_base = os.environ.get("SUPABASE_REST_URL")
-        headers = {
-            "apikey": os.environ.get("SUPABASE_API_KEY"),
-            "Content-Type": "application/json"
-        }
+        url_final = f"{supabase_url}/consolidado_microambiente"
+        resp_final = requests.post(url_final, headers=headers, json=payload)
 
-        resposta = requests.post(
-            f"{url_base}/consolidado_microambiente",
-            headers=headers,
-            json=consolidado
-        )
+        if resp_final.status_code not in [200, 201]:
+            print("❌ Erro ao salvar no Supabase:", resp_final.text)
+            return jsonify({"erro": "Erro ao salvar consolidado."}), 500
 
-        if resposta.status_code == 201:
-            print("✅ Consolidado salvo com sucesso no Supabase!")
-            return jsonify({"mensagem": "Consolidado salvo com sucesso."})
-        else:
-            print("❌ Erro ao salvar no Supabase:", resposta.text)
-            return jsonify({"erro": "Erro ao salvar no Supabase."}), 500
+        print("✅ Consolidado salvo com sucesso.")
+        return jsonify({"mensagem": "Consolidado salvo com sucesso."})
+
+    except Exception as e:
+        print("💥 ERRO GERAL:", str(e))
+        return jsonify({"erro": str(e)}), 500
 
