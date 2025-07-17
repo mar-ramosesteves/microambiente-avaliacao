@@ -1723,7 +1723,7 @@ def salvar_consolidado_microambiente():
             "autoavaliacao": autoavaliacao,
             "avaliacoesEquipe": avaliacoes_equipe
         }
-
+        
         # 💾 Salvar na tabela final
         payload = {
             "empresa": empresa,
