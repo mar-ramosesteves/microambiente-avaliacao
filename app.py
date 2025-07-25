@@ -31,6 +31,55 @@ matriz = pd.read_excel(
     "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx",
     dtype={"PONTUACAO_IDEAL": float, "PONTUACAO_REAL": float} # <-- CORREÇÃO AQUI
 )
+
+# --- NOVA FUNÇÃO PARA SALVAR O RELATÓRIO ANALÍTICO NO SUPABASE ---
+# Mantenha sua função 'salvar_json_ia_no_supabase' existente intacta.
+# Esta nova função será usada APENAS para o Relatório Analítico.
+def salvar_relatorio_analitico_no_supabase(dados_ia, empresa, codrodada, emaillider_val, tipo_relatorio_str):
+    """
+    Salva os dados gerados do relatório analítico no Supabase.
+    """
+    if not SUPABASE_REST_URL or not SUPABASE_KEY:
+        print("❌ Não foi possível salvar o relatório analítico no Supabase: Variáveis de ambiente não configuradas.")
+        return
+
+    # Ajuste o nome da tabela no Supabase se for diferente.
+    # Esta tabela deve ser para os dados do relatório analítico por questão.
+    url = f"{SUPABASE_REST_URL}/relatorios_gerados" # CORREÇÃO: Nome da tabela é 'relatorios_gerados'
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}" # Use a chave de serviço para escrita se for o caso
+    }
+
+    payload = {
+        "empresa": empresa,
+        "codrodada": codrodada,
+        "emaillider": emaillider_val, # Agora usando o parâmetro correto da função
+        "dados_json": dados_ia, # Os dados JSON completos do relatório analítico
+        "tipo_relatorio": tipo_relatorio_str,
+        "data_criacao": datetime.now().isoformat()
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response.raise_for_status() # Lança um erro para status de resposta HTTP ruins (4xx ou 5xx)
+        print("✅ JSON do relatório analítico salvo no Supabase com sucesso.")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro ao salvar JSON do relatório analítico no Supabase: {e}")
+        if hasattr(response, 'status_code') and hasattr(response, 'text'):
+            print(f"Detalhes da resposta do Supabase: Status {response.status_code} - {response.text}")
+        else:
+            print("Não foi possível obter detalhes da resposta do Supabase.")
+
+# --- EXECUÇÃO DO FLASK APP ---
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
+
+
+
+
+
 @app.route("/")
 def home():
     return "API Microambiente Online"
