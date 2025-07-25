@@ -594,6 +594,10 @@ def salvar_grafico_media_equipe_dimensao():
 
     
     try:
+        # --- ADICIONE ESTAS DUAS LINHAS AQUI ---
+        supabase_rest_url = os.environ.get("SUPABASE_REST_URL")
+        supabase_key = os.environ.get("SUPABASE_KEY")
+        # --- FIM DA ADIÇÃO ---
         
         from statistics import mean
         import requests
