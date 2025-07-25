@@ -678,15 +678,13 @@ def salvar_grafico_media_equipe_dimensao():
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
 
-
-        # AQUI VAI O NOVO BLOCO `dados_json` para o gráfico de DIMENSÕES
+        # AQUI VAI O NOVO BLOCO `dados_json` para o gráfico de DIMENSÕES (INDENTAÇÃO CORRIGIDA)
         # Cole este bloco na rota de dimensões, após os cálculos de 'resultado' para DIMENSÃO.
-                dados_json = {
-                    "titulo": "MÉDIA DA EQUIPE - DIMENSÕES", # Título específico para dimensões
-                    "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
-                    "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records") # Dados usando DIMENSAO
-                }
-
+        dados_json = { # <-- ESTA LINHA DEVE ESTAR ALINHADA COM `df = pd.DataFrame(...)`
+            "titulo": "MÉDIA DA EQUIPE - DIMENSÕES", # Título específico para dimensões
+            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
+            "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records") # Dados usando DIMENSAO
+        }
         
         # Salvar também o JSON com prefixo IA_ na subpasta ia_json
         dados_json = {
