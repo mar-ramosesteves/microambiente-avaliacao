@@ -614,8 +614,10 @@ def salvar_grafico_media_equipe_dimensao():
 
         # --- BUSCAR RELATÓRIO CONSOLIDADO DE MICROAMBIENTE DO SUPABASE ---
         # AQUI MUDAMOS A FONTE DE DADOS DO GOOGLE DRIVE PARA O SUPABASE.
-        url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente" # Nome da sua tabela de consolidados de microambiente
-
+        # --- BUSCAR RELATÓRIO CONSOLIDADO DE MICROAMBIENTE DO SUPABASE ---
+        # AQUI MUDAMOS A FONTE DE DADOS DO GOOGLE DRIVE PARA O SUPABASE.
+        url_consolidado_microambiente = f"{supabase_rest_url}/consolidado_microambiente" # Usando 'supabase_rest_url' LOCAL
+        
         # Parâmetros de busca para o consolidado
         params_consolidado = {
             "empresa": f"eq.{empresa}",
@@ -624,11 +626,14 @@ def salvar_grafico_media_equipe_dimensao():
         }
 
         print(f"DEBUG: Buscando consolidado de microambiente no Supabase para Empresa: {empresa}, Rodada: {codrodada}, Líder: {emaillider_req}")
+        
+        # HEADERS para a requisição do consolidado
+        headers_consolidado_busca = { # Renomeado para evitar conflito
+            "apikey": supabase_key, # Usando 'supabase_key' LOCAL
+            "Authorization": f"Bearer {supabase_key}" # Usando 'supabase_key' LOCAL
+        }
 
-        consolidado_response = requests.get(url_consolidado_microambiente, headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}"
-        }, params=params_consolidado, timeout=30)
+        consolidado_response = requests.get(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
         consolidado_response.raise_for_status() # Lança erro para status HTTP ruins
 
         consolidated_data_list = consolidado_response.json()
@@ -638,12 +643,11 @@ def salvar_grafico_media_equipe_dimensao():
 
         # Assume que o último registro é o mais relevante ou que só há um
         microambiente_consolidado = consolidated_data_list[-1] 
-
+        
         # Extrair respostas para autoavaliação e equipe do JSON consolidado
         # Lembre-se que o JSON consolidado tem {"autoavaliacao": {...}, "avaliacoesEquipe": [...]}
         respostas_auto = microambiente_consolidado.get("autoavaliacao", {})
-        avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", []) # Variável 'avaliacoes' para o loop de cálculo
-            
+        avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", []) # Variável 'avaliacoes' para o loop de cálculo            
 
                     
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
