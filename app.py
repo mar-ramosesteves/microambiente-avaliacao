@@ -798,11 +798,11 @@ def salvar_grafico_media_equipe_subdimensao():
 
         # AQUI VAI O NOVO BLOCO `dados_json`
         # Por favor, use 'emaillider_req' na linha 'subtitulo' conforme ajustamos antes.
-                dados_json = {
-                    "titulo": "MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES",
-                    "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
-                    "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
-                }
+        dados_json = {
+            "titulo": "MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES",
+            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
+            "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
+        }
         
         # ... (o restante do código da rota) ...
 
