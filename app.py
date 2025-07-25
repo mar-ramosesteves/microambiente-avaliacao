@@ -679,6 +679,12 @@ def salvar_grafico_media_equipe_dimensao():
                 calculo.append((dim, pi, pr))
 
         df = pd.DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
+        # --- ADICIONE ESTAS DUAS LINHAS AQUI ---
+        # Converte as colunas IDEAL e REAL para tipo numérico, tratando erros
+        df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
+        df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
+        # --- FIM DA ADIÇÃO ---
+
         resultado = df.groupby("DIMENSAO").sum().reset_index()
         resultado = resultado.merge(pontos_dim, on="DIMENSAO")
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
@@ -690,7 +696,6 @@ def salvar_grafico_media_equipe_dimensao():
             "titulo": "MÉDIA DA EQUIPE - DIMENSÕES", # Título específico para dimensões
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
             "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records") # Dados usando DIMENSAO
-        }
         
         # Salvar também o JSON com prefixo IA_ na subpasta ia_json
         dados_json = {
