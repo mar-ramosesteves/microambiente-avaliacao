@@ -581,8 +581,16 @@ def salvar_grafico_autoavaliacao_subdimensao():
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/salvar-grafico-media-equipe-dimensao", methods=["POST"])
+@app.route("/salvar-grafico-media-equipe-dimensao", methods=["POST", "OPTIONS"])
 def salvar_grafico_media_equipe_dimensao():
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'CORS preflight OK'})
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
+
+    
     try:
         
         from statistics import mean
