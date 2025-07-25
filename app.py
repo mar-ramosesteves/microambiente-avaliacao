@@ -702,7 +702,16 @@ def salvar_grafico_media_equipe_dimensao():
         return jsonify(dados_json), 200 # <-- Retorna os dados do gráfico diretamente
 
     except Exception as e:
-        return jsonify({"erro": str(e)}), 500
+        print("\n" + "="*50) # Linha de destaque no log
+        print("🚨🚨🚨 ERRO CRÍTICO NA ROTA salvar-grafico-media-equipe-dimensao 🚨🚨🚨")
+        print(f"Tipo do erro: {type(e).__name__}")
+        print(f"Mensagem do erro: {str(e)}")
+        print("TRACEBACK COMPLETO ABAIXO:")
+        traceback.print_exc() # Isso imprime diretamente no sys.stderr, que geralmente vai para o log
+        print("="*50 + "\n") # Linha de destaque no log
+    
+        # Retorna o erro para o frontend (opcionalmente sem o traceback se não quiser expor)
+        return jsonify({"erro": str(e), "debug_info": "Verifique os logs do Render.com para detalhes."}), 500
 
 
 @app.route("/salvar-grafico-media-equipe-subdimensao", methods=["POST"])
