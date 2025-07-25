@@ -1,81 +1,85 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import pandas as pd
-import json
 import os
+import json
 import requests
-from datetime import datetime
-from io import BytesIO
-from flask_cors import cross_origin
-import io
+import pandas as pd
+from flask import Flask, request, jsonify
+from flask_cors import CORS, cross_origin # Manter cross_origin se for usado em alguma rota específica
+from datetime import datetime, timedelta
 import traceback
+from statistics import mean # Mantenha se você a utiliza em cálculos
 
+# --- 1. DEFINIÇÃO DE VARIÁVEIS DE AMBIENTE GLOBAIS (DEVE ESTAR AQUI) ---
+SUPABASE_REST_URL = os.environ.get("SUPABASE_REST_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
+# --- 2. INICIALIZAÇÃO DO FLASK E CORS (DEVE VIR DEPOIS DAS VARS DE AMBIENTE) ---
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["https://gestor.thehrkey.tech"]}}, supports_credentials=True)
 
-@app.after_request
-def aplicar_cors(response):
-    response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    return response
+# --- 3. FUNÇÕES AUXILIARES GLOBAIS (DEVEM VIR DEPOIS DO APP E ANTES DAS ROTAS) ---
 
-
-
-# Carregar planilhas
-tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
-tabela_sub = pd.read_excel("pontos_maximos_subdimensao.xlsx")
-matriz = pd.read_excel(
-    "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx",
-    dtype={"PONTUACAO_IDEAL": float, "PONTUACAO_REAL": float} # <-- CORREÇÃO AQUI
-)
-
-# --- NOVA FUNÇÃO PARA SALVAR O RELATÓRIO ANALÍTICO NO SUPABASE ---
-# Mantenha sua função 'salvar_json_ia_no_supabase' existente intacta.
-# Esta nova função será usada APENAS para o Relatório Analítico.
-def salvar_relatorio_analitico_no_supabase(dados_ia, empresa, codrodada, emaillider_val, tipo_relatorio_str):
+# Sua função salvar_relatorio_analitico_no_supabase (agora renomeada para salvar_json_no_supabase para clareza)
+# Cole a definição COMPLETA desta função aqui:
+def salvar_json_no_supabase(dados_relatorio_json, empresa, codrodada, emaillider_val, tipo_relatorio_str):
     """
-    Salva os dados gerados do relatório analítico no Supabase.
+    Salva os dados gerados de um relatório ou gráfico no Supabase na tabela relatorios_gerados.
+    Utiliza 'emaillider' e 'data_criacao' para consistência com o DB.
     """
-    if not SUPABASE_REST_URL or not SUPABASE_KEY:
-        print("❌ Não foi possível salvar o relatório analítico no Supabase: Variáveis de ambiente não configuradas.")
-        return
+    if not SUPABASE_REST_URL or not SUPABASE_KEY: # Agora SUPABASE_REST_URL e SUPABASE_KEY estarão definidos
+        print("❌ Não foi possível salvar no Supabase: Variáveis de ambiente não configuradas.")
+        return False # Retorna False para indicar falha
 
-    # Ajuste o nome da tabela no Supabase se for diferente.
-    # Esta tabela deve ser para os dados do relatório analítico por questão.
-    url = f"{SUPABASE_REST_URL}/relatorios_gerados" # CORREÇÃO: Nome da tabela é 'relatorios_gerados'
+    url = f"{SUPABASE_REST_URL}/relatorios_gerados" # Nome da tabela no Supabase
+
     headers = {
         "Content-Type": "application/json",
         "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}" # Use a chave de serviço para escrita se for o caso
+        "Authorization": f"Bearer {SUPABASE_KEY}"
     }
 
     payload = {
         "empresa": empresa,
         "codrodada": codrodada,
-        "emaillider": emaillider_val, # Agora usando o parâmetro correto da função
-        "dados_json": dados_ia, # Os dados JSON completos do relatório analítico
+        "emaillider": emaillider_val,
         "tipo_relatorio": tipo_relatorio_str,
+        "dados_json": dados_relatorio_json,
         "data_criacao": datetime.now().isoformat()
     }
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status() # Lança um erro para status de resposta HTTP ruins (4xx ou 5xx)
-        print("✅ JSON do relatório analítico salvo no Supabase com sucesso.")
+        response.raise_for_status()
+        print(f"✅ JSON do '{tipo_relatorio_str}' salvo no Supabase com sucesso.")
+        return True
     except requests.exceptions.RequestException as e:
-        print(f"❌ Erro ao salvar JSON do relatório analítico no Supabase: {e}")
+        print(f"❌ Erro ao salvar JSON do '{tipo_relatorio_str}' no Supabase: {e}")
         if hasattr(response, 'status_code') and hasattr(response, 'text'):
             print(f"Detalhes da resposta do Supabase: Status {response.status_code} - {response.text}")
         else:
             print("Não foi possível obter detalhes da resposta do Supabase.")
+        return False
 
-# --- EXECUÇÃO DO FLASK APP ---
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
+# Sua função extrair_valor (se ela for global e usada por várias rotas)
+def extrair_valor(df, cod, valor_resposta, arquetipos_list):
+    # ... (código da sua função extrair_valor) ...
+    pass
 
+
+# --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS (DEVE VIR DEPOIS DAS FUNÇÕES AUXILIARES) ---
+tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
+tabela_sub = pd.read_excel("pontos_maximos_subdimensao.xlsx")
+matriz = pd.read_excel(
+    "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx",
+    dtype={"PONTUACAO_IDEAL": float, "PONTUACAO_REAL": float}
+)
+
+# --- 5. DEFINIÇÕES DE ROTAS COMEÇAM A PARTIR DAQUI ---
+# Por exemplo, sua rota home:
+@app.route("/")
+def home():
+    return "API Microambiente Online"
+
+# ... (suas outras rotas, como gerar_relatorio_analitico, gerar_graficos_comparativos, salvar-grafico-media-equipe-dimensao) ...
 
 
 
