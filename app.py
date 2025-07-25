@@ -84,9 +84,9 @@ def home():
 
 
 
-@app.route("/")
-def home():
-    return "API Microambiente Online"
+# @app.route("/")
+# def home():
+#    return "API Microambiente Online"
 
 @app.route("/avaliar", methods=["POST"])
 def avaliar():
