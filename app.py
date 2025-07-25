@@ -696,7 +696,7 @@ def salvar_grafico_media_equipe_dimensao():
             "titulo": "MÉDIA DA EQUIPE - DIMENSÕES", # Título específico para dimensões
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
             "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records") # Dados usando DIMENSAO
-        
+        }
         # Salvar também o JSON com prefixo IA_ na subpasta ia_json
         dados_json = {
             "titulo": "MÉDIA DA EQUIPE - DIMENSÕES",
