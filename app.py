@@ -1,17 +1,13 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-import io
 import json
 import os
 import requests
 from datetime import datetime
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from io import BytesIO
 from flask_cors import cross_origin
-
+import io
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["https://gestor.thehrkey.tech"]}}, supports_credentials=True)
@@ -588,17 +584,15 @@ def salvar_grafico_autoavaliacao_subdimensao():
 @app.route("/salvar-grafico-media-equipe-dimensao", methods=["POST"])
 def salvar_grafico_media_equipe_dimensao():
     try:
-        from matplotlib import pyplot as plt
-        import matplotlib.ticker as mticker
-        import tempfile
+        
         from statistics import mean
 
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        emailLider = dados.get("emailLider")
+        emaillider_req = dados.get("emailLider") # Ajustado para consistência com o frontend e o DB
 
-        if not all([empresa, codrodada, emailLider]):
+        if not all([empresa, codrodada, emaillider_req]): # <-- ALTERADO AQUI
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
         # --- GOOGLE DRIVE ---
@@ -617,7 +611,7 @@ def salvar_grafico_media_equipe_dimensao():
 
         id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
         id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emailLider.lower(), id_rodada)
+        id_lider = buscar_id(emaillider_req.lower(), id_rodada) # <-- ALTERADO AQUI
 
         if not id_lider:
             return jsonify({"erro": "Pasta do líder não encontrada."}), 404
@@ -629,7 +623,7 @@ def salvar_grafico_media_equipe_dimensao():
         avaliacoes = []
         for arq in arquivos:
             nome = arq["name"]
-            if "microambiente" in nome and emailLider in nome and codrodada in nome:
+            if "microambiente" in nome and emaillider_req in nome and codrodada in nome: # <-- ALTERADO AQUI
                 req = service.files().get_media(fileId=arq["id"])
                 fh = io.BytesIO()
                 downloader = MediaIoBaseDownload(fh, req)
@@ -676,56 +670,30 @@ def salvar_grafico_media_equipe_dimensao():
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
 
-        # --- GRÁFICO ---
-        fig, ax = plt.subplots(figsize=(10, 6))
-        x = resultado["DIMENSAO"]
-        ax.plot(x, resultado["REAL_%"], label="Como é", color="navy", marker='o')
-        ax.plot(x, resultado["IDEAL_%"], label="Como deveria ser", color="orange", marker='o')
 
-        for i, v in enumerate(resultado["REAL_%"]):
-            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
-        for i, v in enumerate(resultado["IDEAL_%"]):
-            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
+        # AQUI VAI O NOVO BLOCO `dados_json` para o gráfico de DIMENSÕES
+        # Cole este bloco na rota de dimensões, após os cálculos de 'resultado' para DIMENSÃO.
+                dados_json = {
+                    "titulo": "MÉDIA DA EQUIPE - DIMENSÕES", # Título específico para dimensões
+                    "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
+                    "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records") # Dados usando DIMENSAO
+                }
 
-        ax.axhline(60, color="gray", linestyle="--", linewidth=1)
-        ax.set_ylim(0, 100)
-        ax.yaxis.set_major_locator(mticker.MultipleLocator(10))
-
-        fig.suptitle("MÉDIA DA EQUIPE - DIMENSÕES", fontsize=14, weight="bold", y=0.97)
-        plt.tight_layout(rect=[0, 0, 1, 0.93])
-
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        numero_avaliacoes = len(avaliacoes)
-        ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
-        ax.text(0.5, 1.01, f"Média da Equipe - Rodada: {codrodada} - {data_hora}   |  N = {numero_avaliacoes}",
-                transform=ax.transAxes, ha="center", fontsize=9)
-
-        ax.set_facecolor("#f2f2f2")
-        fig.patch.set_facecolor('#f2f2f2')
-        ax.legend()
-        plt.tight_layout()
-
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            caminho_pdf = tmp.name
-            plt.savefig(caminho_pdf, format="pdf")
-
-        nome_pdf = f"grafico_microambiente_mediaequipe_dimensao_{emailLider}_{codrodada}.pdf"
-        with open(caminho_pdf, "rb") as f:
-            media = MediaIoBaseUpload(f, mimetype="application/pdf")
-            metadata = {"name": nome_pdf, "parents": [id_lider]}
-            service.files().create(body=metadata, media_body=media).execute()
-
+        
         # Salvar também o JSON com prefixo IA_ na subpasta ia_json
         dados_json = {
             "titulo": "MÉDIA DA EQUIPE - DIMENSÕES",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
             "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
         }
-        salvar_json_ia_no_drive(dados_json, nome_pdf, service, id_lider)
 
-        os.remove(caminho_pdf)
-        return jsonify({"mensagem": "✅ Gráfico da Média da Equipe gerado com sucesso."})
+        # --- Chamar a função para salvar os dados do gráfico gerados no Supabase ---
+        # Definir o tipo de relatório para o Supabase
+        tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_dimensao" 
+        salvar_relatorio_analitico_no_supabase(dados_json, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
 
+        # Retornando o JSON completo para o navegador
+        return jsonify(dados_json), 200 # <-- Retorna os dados do gráfico diretamente
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
@@ -741,9 +709,9 @@ def salvar_grafico_media_equipe_subdimensao():
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        emailLider = dados.get("emailLider")
+        emaillider_req = dados.get("emailLider") # <-- ALTERADO AQUI
 
-        if not all([empresa, codrodada, emailLider]):
+        if not all([empresa, codrodada, emaillider_req]): # <-- ALTERADO AQUI
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
         # GOOGLE DRIVE
@@ -762,7 +730,7 @@ def salvar_grafico_media_equipe_subdimensao():
 
         id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
         id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emailLider.lower(), id_rodada)
+        id_lider = buscar_id(emaillider_req.lower(), id_rodada) # <-- ALTERADO AQUI
 
         if not id_lider:
             return jsonify({"erro": "Pasta do líder não encontrada."}), 404
@@ -774,7 +742,7 @@ def salvar_grafico_media_equipe_subdimensao():
         dados_equipes = []
         for arq in arquivos:
             nome = arq["name"]
-            if "microambiente" in nome and emailLider in nome and codrodada in nome:
+            if "microambiente" in nome and emaillider_req in nome and codrodada in nome: # <-- ALTERADO AQUI
                 req = service.files().get_media(fileId=arq["id"])
                 fh = io.BytesIO()
                 downloader = MediaIoBaseDownload(fh, req)
@@ -820,6 +788,18 @@ def salvar_grafico_media_equipe_subdimensao():
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
 
+        # ... (seu código atual de cálculo da rota, que gera 'resultado') ...
+
+        # AQUI VAI O NOVO BLOCO `dados_json`
+        # Por favor, use 'emaillider_req' na linha 'subtitulo' conforme ajustamos antes.
+                dados_json = {
+                    "titulo": "MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES",
+                    "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
+                    "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
+                }
+        
+        # ... (o restante do código da rota) ...
+
         # GRÁFICO
         fig, ax = plt.subplots(figsize=(10, 6))
         x = resultado["SUBDIMENSAO"]
@@ -844,32 +824,13 @@ def salvar_grafico_media_equipe_subdimensao():
         numero_avaliacoes = len(dados_equipes)
 
         ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
-        ax.text(0.5, 1.01, f"Média da Equipe - Líder: {emailLider} - Rodada: {codrodada} - {data_hora} | N = {numero_avaliacoes}",
+        ax.text(0.5, 1.01, f"Média da Equipe - Líder: {emaillider_req} - Rodada: {codrodada} - {data_hora} | N = {numero_avaliacoes}", # <-- ALTERADO AQUI
                 transform=ax.transAxes, ha="center", fontsize=9)
 
         ax.set_facecolor("#f2f2f2")
         fig.patch.set_facecolor('#f2f2f2')
-        ax.legend()
-
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            caminho_pdf = tmp.name
-            plt.savefig(caminho_pdf, format="pdf")
-
-        nome_pdf = f"grafico_microambiente_media_equipe_subdimensao_{emailLider}_{codrodada}.pdf"
-        with open(caminho_pdf, "rb") as f:
-            media = MediaIoBaseUpload(f, mimetype="application/pdf")
-            metadata = {"name": nome_pdf, "parents": [id_lider]}
-            service.files().create(body=metadata, media_body=media).execute()
-
-        # Salvar também o JSON com prefixo IA_ na subpasta ia_json
-        dados_json = {
-            "titulo": "MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
-            "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
-        }
-        salvar_json_ia_no_drive(dados_json, nome_pdf, service, id_lider)
-
-        os.remove(caminho_pdf)
+        ax.legend()  
+        
         return jsonify({"mensagem": "✅ Gráfico de subdimensões gerado com sucesso!"})
 
 
