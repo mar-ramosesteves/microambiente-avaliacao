@@ -27,8 +27,10 @@ def aplicar_cors(response):
 # Carregar planilhas
 tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
 tabela_sub = pd.read_excel("pontos_maximos_subdimensao.xlsx")
-matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-
+matriz = pd.read_excel(
+    "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx",
+    dtype={"PONTUACAO_IDEAL": float, "PONTUACAO_REAL": float} # <-- CORREÇÃO AQUI
+)
 @app.route("/")
 def home():
     return "API Microambiente Online"
