@@ -676,6 +676,7 @@ def salvar_grafico_media_equipe_dimensao():
                 dim = linha.iloc[0]["DIMENSAO"]
                 pi = linha.iloc[0]["PONTUACAO_IDEAL"]
                 pr = linha.iloc[0]["PONTUACAO_REAL"]
+                
                 calculo.append((dim, pi, pr))
 
         df = pd.DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
@@ -687,6 +688,8 @@ def salvar_grafico_media_equipe_dimensao():
 
         resultado = df.groupby("DIMENSAO").sum().reset_index()
         resultado = resultado.merge(pontos_dim, on="DIMENSAO")
+        resultado["PONTOS_MAXIMOS_DIMENSAO"] = pd.to_numeric(resultado["PONTOS_MAXIMOS_DIMENSAO"], errors="coerce").fillna(0)
+
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
 
