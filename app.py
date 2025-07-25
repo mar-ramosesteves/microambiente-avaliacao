@@ -64,6 +64,45 @@ def extrair_valor(df, cod, valor_resposta, arquetipos_list):
     # ... (código da sua função extrair_valor) ...
     pass
 
+def salvar_relatorio_analitico_no_supabase(dados_json, empresa, codrodada, email_lider, nome_arquivo):
+    """
+    Salva um relatório analítico ou gráfico no Supabase, na tabela consolidado_microambiente.
+    """
+    if not SUPABASE_REST_URL or not SUPABASE_KEY:
+        print("❌ Erro: variáveis de ambiente SUPABASE não configuradas.")
+        return
+
+    url = f"{SUPABASE_REST_URL}/consolidado_microambiente"
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "empresa": empresa,
+        "codrodada": codrodada,
+        "emaillider": email_lider,
+        "data_criacao": datetime.now().isoformat(),
+        "dados_json": dados_json,
+        "nome_arquivo": nome_arquivo
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        print(f"✅ JSON '{nome_arquivo}' salvo no Supabase com sucesso.")
+    except Exception as e:
+        print("⚠️ Erro ao salvar relatório analítico no Supabase:", str(e))
+        if hasattr(response, 'text'):
+            print("Resposta Supabase:", response.text)
+
+
+
+
+
+
 
 # --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS (DEVE VIR DEPOIS DAS FUNÇÕES AUXILIARES) ---
 tabela_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
