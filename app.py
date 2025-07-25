@@ -684,6 +684,7 @@ def salvar_grafico_media_equipe_dimensao():
         # Converte as colunas IDEAL e REAL para tipo numérico, tratando erros
         df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
         df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
+        
         # --- FIM DA ADIÇÃO ---
 
         resultado = df.groupby("DIMENSAO").sum().reset_index()
@@ -692,6 +693,9 @@ def salvar_grafico_media_equipe_dimensao():
 
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
+
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+
 
         # AQUI VAI O NOVO BLOCO `dados_json` para o gráfico de DIMENSÕES (INDENTAÇÃO CORRIGIDA)
         # Cole este bloco na rota de dimensões, após os cálculos de 'resultado' para DIMENSÃO.
