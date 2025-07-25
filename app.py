@@ -596,6 +596,9 @@ def salvar_grafico_media_equipe_dimensao():
     try:
         
         from statistics import mean
+        import requests
+        from datetime import datetime
+        
 
         dados = request.get_json()
         empresa = dados.get("empresa")
@@ -605,49 +608,40 @@ def salvar_grafico_media_equipe_dimensao():
         if not all([empresa, codrodada, emaillider_req]): # <-- ALTERADO AQUI
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # --- GOOGLE DRIVE ---
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-            scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=creds)
-        PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
+        # --- BUSCAR RELATÓRIO CONSOLIDADO DE MICROAMBIENTE DO SUPABASE ---
+        # AQUI MUDAMOS A FONTE DE DADOS DO GOOGLE DRIVE PARA O SUPABASE.
+        url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente" # Nome da sua tabela de consolidados de microambiente
 
-        def buscar_id(nome, pai):
-            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
-            return resp[0]["id"] if resp else None
+        # Parâmetros de busca para o consolidado
+        params_consolidado = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emaillider_req}"
+        }
 
-        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emaillider_req.lower(), id_rodada) # <-- ALTERADO AQUI
+        print(f"DEBUG: Buscando consolidado de microambiente no Supabase para Empresa: {empresa}, Rodada: {codrodada}, Líder: {emaillider_req}")
 
-        if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+        consolidado_response = requests.get(url_consolidado_microambiente, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }, params=params_consolidado, timeout=30)
+        consolidado_response.raise_for_status() # Lança erro para status HTTP ruins
 
-        arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)").execute().get("files", [])
+        consolidated_data_list = consolidado_response.json()
 
-        avaliacoes = []
-        for arq in arquivos:
-            nome = arq["name"]
-            if "microambiente" in nome and emaillider_req in nome and codrodada in nome: # <-- ALTERADO AQUI
-                req = service.files().get_media(fileId=arq["id"])
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
-                conteudo = json.load(fh)
-                avaliacoes = conteudo.get("avaliacoesEquipe", [])
-                break
+        if not consolidated_data_list:
+            return jsonify({"erro": "Consolidado de microambiente não encontrado no Supabase para os dados fornecidos."}), 404
 
-        if not avaliacoes:
-            return jsonify({"erro": "Avaliações da equipe não encontradas."}), 404
+        # Assume que o último registro é o mais relevante ou que só há um
+        microambiente_consolidado = consolidated_data_list[-1] 
 
+        # Extrair respostas para autoavaliação e equipe do JSON consolidado
+        # Lembre-se que o JSON consolidado tem {"autoavaliacao": {...}, "avaliacoesEquipe": [...]}
+        respostas_auto = microambiente_consolidado.get("autoavaliacao", {})
+        avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", []) # Variável 'avaliacoes' para o loop de cálculo
+            
+
+                    
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
         pontos_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
 
