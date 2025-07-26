@@ -672,33 +672,66 @@ def salvar_grafico_media_equipe_dimensao():
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
         return response
 
-    
     try:
-        # --- ADICIONE ESTAS DUAS LINHAS AQUI ---
-        supabase_rest_url = os.environ.get("SUPABASE_REST_URL")
-        supabase_key = os.environ.get("SUPABASE_KEY")
-        # --- FIM DA ADIÇÃO ---
-        
         from statistics import mean
         import requests
         from datetime import datetime
         
-
+        # As variáveis SUPABASE_REST_URL e SUPABASE_KEY são globais, não precisam ser redefinidas aqui.
+        
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        emaillider_req = dados.get("emailLider") # Ajustado para consistência com o frontend e o DB
+        emaillider_req = dados.get("emailLider") # Consistente com o frontend
 
-        if not all([empresa, codrodada, emaillider_req]): # <-- ALTERADO AQUI
+        if not all([empresa, codrodada, emaillider_req]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
+        # --- Lógica de Caching: Buscar JSON do Gráfico Salvo ---
+        tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_dimensao" 
+
+        url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
+
+        headers_cache_busca = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+
+        params_cache = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emaillider_req}", 
+            "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
+            "order": "data_criacao.desc",
+            "limit": 1
+        }
+
+        print(f"DEBUG: Buscando cache do gráfico '{tipo_relatorio_grafico_atual}' no Supabase...")
+        cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
+        cache_response.raise_for_status()
+        cached_data_list = cache_response.json()
+
+        if cached_data_list:
+            cached_report = cached_data_list[0]
+            data_criacao_cache_str = cached_report.get("data_criacao")
+            
+            if data_criacao_cache_str:
+                data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00')) 
+                cache_validity_period = timedelta(hours=1) # Cache válido por 1 hora
+
+                if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < cache_validity_period:
+                    print(f"✅ Cache válido encontrado para o gráfico '{tipo_relatorio_grafico_atual}'. Retornando dados cacheados.")
+                    return jsonify(cached_report.get("dados_json", {})), 200
+                else:
+                    print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' expirado. Recalculando...")
+            else:
+                print("Cache encontrado, mas sem data de criação válida. Recalculando...")
+        else:
+            print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' não encontrado. Recalculando...")
+
         # --- BUSCAR RELATÓRIO CONSOLIDADO DE MICROAMBIENTE DO SUPABASE ---
-        # AQUI MUDAMOS A FONTE DE DADOS DO GOOGLE DRIVE PARA O SUPABASE.
-        # --- BUSCAR RELATÓRIO CONSOLIDADO DE MICROAMBIENTE DO SUPABASE ---
-        # AQUI MUDAMOS A FONTE DE DADOS DO GOOGLE DRIVE PARA O SUPABASE.
-        url_consolidado_microambiente = f"{supabase_rest_url}/consolidado_microambiente" # Usando 'supabase_rest_url' LOCAL
+        url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente" # Usando GLOBAL SUPABASE_REST_URL
         
-        # Parâmetros de busca para o consolidado
         params_consolidado = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
@@ -707,10 +740,9 @@ def salvar_grafico_media_equipe_dimensao():
 
         print(f"DEBUG: Buscando consolidado de microambiente no Supabase para Empresa: {empresa}, Rodada: {codrodada}, Líder: {emaillider_req}")
         
-        # HEADERS para a requisição do consolidado
-        headers_consolidado_busca = { # Renomeado para evitar conflito
-            "apikey": supabase_key, # Usando 'supabase_key' LOCAL
-            "Authorization": f"Bearer {supabase_key}" # Usando 'supabase_key' LOCAL
+        headers_consolidado_busca = {
+            "apikey": SUPABASE_KEY, # Usando GLOBAL SUPABASE_KEY
+            "Authorization": f"Bearer {SUPABASE_KEY}" # Usando GLOBAL SUPABASE_KEY
         }
 
         consolidado_response = requests.get(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
@@ -721,17 +753,14 @@ def salvar_grafico_media_equipe_dimensao():
         if not consolidated_data_list:
             return jsonify({"erro": "Consolidado de microambiente não encontrado no Supabase para os dados fornecidos."}), 404
 
-        # Assume que o último registro é o mais relevante ou que só há um
         microambiente_consolidado = consolidated_data_list[-1] 
         
-        # Extrair respostas para autoavaliação e equipe do JSON consolidado
-        # Lembre-se que o JSON consolidado tem {"autoavaliacao": {...}, "avaliacoesEquipe": [...]}
         respostas_auto = microambiente_consolidado.get("autoavaliacao", {})
-        avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", []) # Variável 'avaliacoes' para o loop de cálculo            
-
-                    
-        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-        pontos_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
+        avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", []) 
+        
+        # --- CARREGAR MATRIZES LOCAIS (já estão globais, usar as vars globais) ---
+        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
         calculo = []
         for i in range(1, 49):
@@ -739,32 +768,46 @@ def salvar_grafico_media_equipe_dimensao():
             q_real = f"{q}C"
             q_ideal = f"{q}k"
 
-            valores_real = [int(av[q_real]) for av in avaliacoes if q_real in av]
-            valores_ideal = [int(av[q_ideal]) for av in avaliacoes if q_ideal in av]
+            # Converte as respostas para INT de forma segura
+            val_real_auto_str = respostas_auto.get(q_real)
+            valor_real_auto = int(val_real_auto_str) if val_real_auto_str and isinstance(val_real_auto_str, str) and val_real_auto_str.strip().isdigit() else 0
 
-            if not valores_real or not valores_ideal:
-                continue
+            val_ideal_auto_str = respostas_auto.get(q_ideal)
+            valor_ideal_auto = int(val_ideal_auto_str) if val_ideal_auto_str and isinstance(val_ideal_auto_str, str) and val_ideal_auto_str.strip().isdigit() else 0
+            
+            valores_real_equipe = []
+            for av in avaliacoes:
+                val_str = av.get(q_real)
+                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
+                    valores_real_equipe.append(int(val_str))
+            
+            valores_ideal_equipe = []
+            for av in avaliacoes:
+                val_str = av.get(q_ideal)
+                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
+                    valores_ideal_equipe.append(int(val_str))
 
-            media_real = round(mean(valores_real))
-            media_ideal = round(mean(valores_ideal))
+            media_real = round(mean(valores_real_equipe)) if valores_real_equipe else 0
+            media_ideal = round(mean(valores_ideal_equipe)) if valores_ideal_equipe else 0
+            
             chave = f"{q}_I{media_ideal}_R{media_real}"
 
             linha = matriz[matriz["CHAVE"] == chave]
             if not linha.empty:
                 dim = linha.iloc[0]["DIMENSAO"]
-                pi = linha.iloc[0]["PONTUACAO_IDEAL"]
-                pr = linha.iloc[0]["PONTUACAO_REAL"]
+                pi_raw = linha.iloc[0]["PONTUACAO_IDEAL"]
+                pr_raw = linha.iloc[0]["PONTUACAO_REAL"]
+                
+                pi = pd.to_numeric(pi_raw, errors='coerce').fillna(0).item()
+                pr = pd.to_numeric(pr_raw, errors='coerce').fillna(0).item()
                 
                 calculo.append((dim, pi, pr))
 
         df = pd.DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
-        # --- ADICIONE ESTAS DUAS LINHAS AQUI ---
         # Converte as colunas IDEAL e REAL para tipo numérico, tratando erros
         df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
         df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
         
-        # --- FIM DA ADIÇÃO ---
-
         resultado = df.groupby("DIMENSAO").sum().reset_index()
         resultado = resultado.merge(pontos_dim, on="DIMENSAO")
         resultado["PONTOS_MAXIMOS_DIMENSAO"] = pd.to_numeric(resultado["PONTOS_MAXIMOS_DIMENSAO"], errors="coerce").fillna(0)
@@ -773,26 +816,24 @@ def salvar_grafico_media_equipe_dimensao():
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+        numero_avaliacoes = len(avaliacoes) # Número de avaliações da equipe
 
-
-        # AQUI VAI O NOVO BLOCO `dados_json` para o gráfico de DIMENSÕES (INDENTAÇÃO CORRIGIDA)
-        # Cole este bloco na rota de dimensões, após os cálculos de 'resultado' para DIMENSÃO.
-        dados_json = { # <-- ESTA LINHA DEVE ESTAR ALINHADA COM `df = pd.DataFrame(...)`
-            "titulo": "MÉDIA DA EQUIPE - DIMENSÕES", # Título específico para dimensões
-            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
-            "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records") # Dados usando DIMENSAO
+        dados_json = {
+            "titulo": "MÉDIA DA EQUIPE - DIMENSÕES",
+            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
+            "info_avaliacoes": f"Equipe: {numero_avaliacoes} respondentes", # Adicionado para o frontend
+            "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
         }
         
-
         # --- Chamar a função para salvar os dados do gráfico gerados no Supabase ---
-        # Definir o tipo de relatório para o Supabase
         tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_dimensao" 
-        salvar_relatorio_analitico_no_supabase(dados_json, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual) # Usando a função renomeada
 
         # Retornando o JSON completo para o navegador
-        return jsonify(dados_json), 200 # <-- Retorna os dados do gráfico diretamente
+        return jsonify(dados_json), 200
 
     except Exception as e:
+        detailed_traceback = traceback.format_exc()
         print("\n" + "="*50) # Linha de destaque no log
         print("🚨🚨🚨 ERRO CRÍTICO NA ROTA salvar-grafico-media-equipe-dimensao 🚨🚨🚨")
         print(f"Tipo do erro: {type(e).__name__}")
@@ -800,10 +841,8 @@ def salvar_grafico_media_equipe_dimensao():
         print("TRACEBACK COMPLETO ABAIXO:")
         traceback.print_exc() # Isso imprime diretamente no sys.stderr, que geralmente vai para o log
         print("="*50 + "\n") # Linha de destaque no log
-    
-        # Retorna o erro para o frontend (opcionalmente sem o traceback se não quiser expor)
+        
         return jsonify({"erro": str(e), "debug_info": "Verifique os logs do Render.com para detalhes."}), 500
-
 
 @app.route("/salvar-grafico-media-equipe-subdimensao", methods=["POST"])
 def salvar_grafico_media_equipe_subdimensao():
