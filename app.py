@@ -792,16 +792,23 @@ def salvar_grafico_media_equipe_dimensao():
             
             chave = f"{q}_I{media_ideal}_R{media_real}"
 
+            # ... (código dentro do loop 'for i in range(1, 49):') ...
+
             linha = matriz[matriz["CHAVE"] == chave]
             if not linha.empty:
                 dim = linha.iloc[0]["DIMENSAO"]
-                pi_raw = linha.iloc[0]["PONTUACAO_IDEAL"]
-                pr_raw = linha.iloc[0]["PONTUACAO_REAL"]
-                
-                pi = pd.to_numeric(pi_raw, errors='coerce').fillna(0).item()
-                pr = pd.to_numeric(pr_raw, errors='coerce').fillna(0).item()
-                
-                calculo.append((dim, pi, pr))
+                pi_val = linha.iloc[0]["PONTUACAO_IDEAL"] # Pega o valor original
+                pr_val = linha.iloc[0]["PONTUACAO_REAL"] # Pega o valor original
+    
+                # --- ADICIONE ESTAS DUAS LINHAS PARA FORÇAR FLOAT ---
+                # Garante que pi e pr são floats. errors='coerce' transforma não-números em NaN.
+                # .fillna(0) transforma NaN em 0.
+                # .item() extrai o valor escalar puro se ele vier como uma Series de um item.
+                pi = pd.to_numeric(pi_val, errors='coerce').fillna(0).item()
+                pr = pd.to_numeric(pr_val, errors='coerce').fillna(0).item()
+                # --- FIM DA ADIÇÃO ---
+    
+                calculo.append((dim, pi, pr)) # Usando pi e pr já convertidos para float
 
         df = pd.DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
         # Converte as colunas IDEAL e REAL para tipo numérico, tratando erros
