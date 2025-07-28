@@ -813,8 +813,8 @@ def salvar_grafico_media_equipe_dimensao():
                 # Garante que pi e pr são floats. errors='coerce' transforma não-números em NaN.
                 # .fillna(0) transforma NaN em 0.
                 # .item() extrai o valor escalar puro se ele vier como uma Series de um item.
-                pi = pd.to_numeric(pi_val, errors='coerce').fillna(0).item()
-                pr = pd.to_numeric(pr_val, errors='coerce').fillna(0).item()
+                pi = float(pi_val)
+                pr = float(pr_val)
                 # --- FIM DA ADIÇÃO ---
     
                 calculo.append((dim, pi, pr)) # Usando pi e pr já convertidos para float
