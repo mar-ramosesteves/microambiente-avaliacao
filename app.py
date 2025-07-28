@@ -860,142 +860,137 @@ def salvar_grafico_media_equipe_dimensao():
         
         return jsonify({"erro": str(e), "debug_info": "Verifique os logs do Render.com para detalhes."}), 500
 
-@app.route("/salvar-grafico-media-equipe-subdimensao", methods=["POST"])
+@app.route("/salvar-grafico-media-equipe-subdimensao", methods=["POST", "OPTIONS"])
 def salvar_grafico_media_equipe_subdimensao():
-    try:
-        from matplotlib import pyplot as plt
-        import matplotlib.ticker as mticker
-        import tempfile
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'CORS preflight OK'})
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
 
+    try:
+        from statistics import mean
+        import requests
+        from datetime import datetime, timedelta
+        
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        emaillider_req = dados.get("emailLider") # <-- ALTERADO AQUI
+        emaillider_req = dados.get("emailLider")
 
-        if not all([empresa, codrodada, emaillider_req]): # <-- ALTERADO AQUI
+        if not all([empresa, codrodada, emaillider_req]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # GOOGLE DRIVE
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-            scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=creds)
-        PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
+        tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_subdimensao"
 
-        def buscar_id(nome, pai):
-            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
-            return resp[0]["id"] if resp else None
+        url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
+        headers_cache_busca = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        params_cache = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emaillider_req}",
+            "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
+            "order": "data_criacao.desc",
+            "limit": 1
+        }
 
-        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emaillider_req.lower(), id_rodada) # <-- ALTERADO AQUI
+        cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
+        cache_response.raise_for_status()
+        cached_data_list = cache_response.json()
 
-        if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+        if cached_data_list:
+            cached_report = cached_data_list[0]
+            data_criacao_cache_str = cached_report.get("data_criacao")
+            if data_criacao_cache_str:
+                data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
+                if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < timedelta(hours=1):
+                    return jsonify(cached_report.get("dados_json", {})), 200
 
-        arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)").execute().get("files", [])
+        url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente"
+        params_consolidado = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emaillider_req}"
+        }
 
-        dados_equipes = []
-        for arq in arquivos:
-            nome = arq["name"]
-            if "microambiente" in nome and emaillider_req in nome and codrodada in nome: # <-- ALTERADO AQUI
-                req = service.files().get_media(fileId=arq["id"])
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
-                conteudo = json.load(fh)
-                for bloco in conteudo.get("avaliacoesEquipe", []):
-                    if bloco.get("tipo") == "microambiente_equipe":
-                        dados_equipes.append(bloco)
+        headers_consolidado_busca = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
 
-        if not dados_equipes:
-            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 404
+        consolidado_response = requests.get(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
+        consolidado_response.raise_for_status()
+        consolidated_data_list = consolidado_response.json()
 
-        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-        pontos_max = pd.read_excel("pontos_maximos_subdimensao.xlsx")
+        if not consolidated_data_list:
+            return jsonify({"erro": "Consolidado não encontrado."}), 404
+
+        microambiente_consolidado = consolidated_data_list[-1]
+        dados_do_consolidado = microambiente_consolidado.get("dados_json", {})
+        respostas_auto = dados_do_consolidado.get("autoavaliacao", {})
+        avaliacoes = dados_do_consolidado.get("avaliacoesEquipe", [])
+
+        matriz = MATRIZ_MICROAMBIENTE_DF
+        pontos_subdim = TABELA_SUBDIMENSAO_MICROAMBIENTE_DF  # <- TROCA PRINCIPAL AQUI
 
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            reais = []
-            ideais = []
-            for equipe in dados_equipes:
-                if f"{q}C" in equipe and f"{q}k" in equipe:
-                    reais.append(int(equipe[f"{q}C"]))
-                    ideais.append(int(equipe[f"{q}k"]))
+            q_real = f"{q}C"
+            q_ideal = f"{q}k"
 
-            if reais and ideais:
-                media_real = round(sum(reais) / len(reais))
-                media_ideal = round(sum(ideais) / len(ideais))
-                chave = f"{q}_I{media_ideal}_R{media_real}"
-                linha = matriz[matriz["CHAVE"] == chave]
-                if not linha.empty:
-                    sub = linha.iloc[0]["SUBDIMENSAO"]
-                    pi = linha.iloc[0]["PONTUACAO_IDEAL"]
-                    pr = linha.iloc[0]["PONTUACAO_REAL"]
-                    calculo.append((sub, pi, pr))
+            val_real_auto = respostas_auto.get(q_real)
+            val_ideal_auto = respostas_auto.get(q_ideal)
+
+            valor_real_auto = int(val_real_auto) if val_real_auto and val_real_auto.strip().isdigit() else 0
+            valor_ideal_auto = int(val_ideal_auto) if val_ideal_auto and val_ideal_auto.strip().isdigit() else 0
+
+            valores_real_equipe = [int(av.get(q_real)) for av in avaliacoes if av.get(q_real, '').strip().isdigit()]
+            valores_ideal_equipe = [int(av.get(q_ideal)) for av in avaliacoes if av.get(q_ideal, '').strip().isdigit()]
+
+            media_real = round(mean(valores_real_equipe)) if valores_real_equipe else 0
+            media_ideal = round(mean(valores_ideal_equipe)) if valores_ideal_equipe else 0
+
+            chave = f"{q}_I{media_ideal}_R{media_real}"
+            linha = matriz[matriz["CHAVE"] == chave]
+
+            if not linha.empty:
+                subdim = linha.iloc[0]["SUBDIMENSAO"]
+                pi = float(linha.iloc[0]["PONTUACAO_IDEAL"])
+                pr = float(linha.iloc[0]["PONTUACAO_REAL"])
+                calculo.append((subdim, pi, pr))
 
         df = pd.DataFrame(calculo, columns=["SUBDIMENSAO", "IDEAL", "REAL"])
+        df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
+        df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
+
         resultado = df.groupby("SUBDIMENSAO").sum().reset_index()
-        resultado = resultado.merge(pontos_max, on="SUBDIMENSAO")
+        resultado = resultado.merge(pontos_subdim, on="SUBDIMENSAO")
+        resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] = pd.to_numeric(resultado["PONTOS_MAXIMOS_SUBDIMENSAO"], errors="coerce").fillna(0)
+
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
 
-        # ... (seu código atual de cálculo da rota, que gera 'resultado') ...
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+        numero_avaliacoes = len(avaliacoes)
 
-        # AQUI VAI O NOVO BLOCO `dados_json`
-        # Por favor, use 'emaillider_req' na linha 'subtitulo' conforme ajustamos antes.
         dados_json = {
-            "titulo": "MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES",
-            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}", # Garanta que 'emaillider_req' está aqui
+            "titulo": "MÉDIA DA EQUIPE - SUBDIMENSÕES",
+            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
+            "info_avaliacoes": f"Equipe: {numero_avaliacoes} respondentes",
             "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
         }
-        
-        # ... (o restante do código da rota) ...
 
-        # GRÁFICO
-        fig, ax = plt.subplots(figsize=(10, 6))
-        x = resultado["SUBDIMENSAO"]
-        ax.plot(x, resultado["REAL_%"], label="Como é", color="navy", marker='o')
-        ax.plot(x, resultado["IDEAL_%"], label="Como deveria ser", color="orange", marker='o')
-
-        for i, v in enumerate(resultado["REAL_%"]):
-            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
-        for i, v in enumerate(resultado["IDEAL_%"]):
-            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
-
-        ax.axhline(60, color="gray", linestyle="--", linewidth=1)
-        ax.set_ylim(0, 100)
-        ax.yaxis.set_major_locator(mticker.MultipleLocator(10))
-
-        fig.suptitle("MICROAMBIENTE DE EQUIPES - SUBDIMENSÕES", fontsize=14, weight="bold", y=0.97)
-
-        plt.xticks(rotation=45)
-        plt.tight_layout(rect=[0, 0, 1, 0.93])
-
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        numero_avaliacoes = len(dados_equipes)
-
-        ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
-        ax.text(0.5, 1.01, f"Média da Equipe - Líder: {emaillider_req} - Rodada: {codrodada} - {data_hora} | N = {numero_avaliacoes}", # <-- ALTERADO AQUI
-                transform=ax.transAxes, ha="center", fontsize=9)
-
-        ax.set_facecolor("#f2f2f2")
-        fig.patch.set_facecolor('#f2f2f2')
-        ax.legend()  
-        
-        return jsonify({"mensagem": "✅ Gráfico de subdimensões gerado com sucesso!"})
-
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
+        return jsonify(dados_json), 200
 
     except Exception as e:
+        import traceback
+        print("Erro:", traceback.format_exc())
         return jsonify({"erro": str(e)}), 500
 
 
