@@ -361,162 +361,138 @@ def preflight_graficos_autoavaliacao():
 
 
 # ROTA PARA GERAR E SALVAR GRÁFICO DE AUTOAVALIAÇÃO DE MICROAMBIENTE
-@app.route("/salvar-grafico-autoavaliacao", methods=["POST"])
+@app.route("/salvar-grafico-autoavaliacao", methods=["POST", "OPTIONS"])
 def salvar_grafico_autoavaliacao():
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'CORS preflight OK'})
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
+
     try:
-        from matplotlib import pyplot as plt
-        import matplotlib.ticker as mticker
-        import tempfile
+        from statistics import mean
+        import requests
+        from datetime import datetime, timedelta
 
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        emailLider = dados.get("emailLider")  # Corrigido aqui
+        emaillider_req = dados.get("emailLider")
 
-        if not all([empresa, codrodada, emailLider]):
+        if not all([empresa, codrodada, emaillider_req]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # --- GOOGLE DRIVE ---
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-            scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=creds)
-        PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
+        tipo_relatorio_grafico_atual = "microambiente_grafico_autoavaliacao_dimensao"
 
-        def buscar_id(nome, pai):
-            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
-            return resp[0]["id"] if resp else None
+        url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
+        headers_cache_busca = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        params_cache = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emaillider_req}",
+            "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
+            "order": "data_criacao.desc",
+            "limit": 1
+        }
 
-        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emailLider.lower(), id_rodada)  # Corrigido aqui
+        print(f"DEBUG: Buscando cache do gráfico '{tipo_relatorio_grafico_atual}' no Supabase...")
+        cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
+        cache_response.raise_for_status()
+        cached_data_list = cache_response.json()
 
-        if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+        if cached_data_list:
+            cached_report = cached_data_list[0]
+            data_criacao_cache_str = cached_report.get("data_criacao")
+            if data_criacao_cache_str:
+                data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
+                if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < timedelta(hours=1):
+                    print("✅ Cache válido encontrado. Retornando dados cacheados.")
+                    return jsonify(cached_report.get("dados_json", {})), 200
 
-        arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)").execute().get("files", [])
+        # Buscar consolidado
+        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
+        headers_consolidado = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        params_consolidado = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emaillider_req}"
+        }
+        print(f"DEBUG: Buscando consolidado microambiente para {empresa}, rodada {codrodada}, líder {emaillider_req}")
+        response = requests.get(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
+        response.raise_for_status()
+        data_list = response.json()
+        if not data_list:
+            return jsonify({"erro": "Consolidado não encontrado."}), 404
 
-        auto = None
-        for arq in arquivos:
-            nome = arq["name"]
-            if "microambiente" in nome and emailLider in nome and codrodada in nome:
-                req = service.files().get_media(fileId=arq["id"])
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
-                conteudo = json.load(fh)
-                auto = conteudo.get("autoavaliacao")
-                break
+        dados_consolidado = data_list[-1].get("dados_json", {})
+        respostas_auto = dados_consolidado.get("autoavaliacao", {})
 
 
-        if not auto:
-            return jsonify({"erro": "Autoavaliação não encontrada."}), 404
 
-        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-        pontos_dim = pd.read_excel("pontos_maximos_dimensao.xlsx")
+	matriz = MATRIZ_MICROAMBIENTE_DF
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF
+
+        from pandas import DataFrame, to_numeric
 
         calculo = []
         for i in range(1, 49):
-            q_campo = f"Q{i:02d}C"
-            q_kampo = f"Q{i:02d}k"
-            if q_campo in auto and q_kampo in auto:
-                real = int(auto[q_campo])
-                ideal = int(auto[q_kampo])
-                chave = f"Q{i:02d}_I{ideal}_R{real}"
-                linha = matriz[matriz["CHAVE"] == chave]
-                if not linha.empty:
-                    dim = linha.iloc[0]["DIMENSAO"]
-                    pi = linha.iloc[0]["PONTUACAO_IDEAL"]
-                    pr = linha.iloc[0]["PONTUACAO_REAL"]
-                    calculo.append((dim, pi, pr))
+            q = f"Q{i:02d}"
+            q_real = f"{q}C"
+            q_ideal = f"{q}k"
 
-        df = pd.DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
+            val_real_str = respostas_auto.get(q_real)
+            val_ideal_str = respostas_auto.get(q_ideal)
+
+            valor_real = int(val_real_str) if val_real_str and val_real_str.strip().isdigit() else 0
+            valor_ideal = int(val_ideal_str) if val_ideal_str and val_ideal_str.strip().isdigit() else 0
+
+            chave = f"{q}_I{valor_ideal}_R{valor_real}"
+            linha = matriz[matriz["CHAVE"] == chave]
+
+            if not linha.empty:
+                dim = linha.iloc[0]["DIMENSAO"]
+                pi = float(linha.iloc[0]["PONTUACAO_IDEAL"])
+                pr = float(linha.iloc[0]["PONTUACAO_REAL"])
+                calculo.append((dim, pi, pr))
+
+        df = DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
+        df["IDEAL"] = to_numeric(df["IDEAL"], errors="coerce").fillna(0)
+        df["REAL"] = to_numeric(df["REAL"], errors="coerce").fillna(0)
+
         resultado = df.groupby("DIMENSAO").sum().reset_index()
         resultado = resultado.merge(pontos_dim, on="DIMENSAO")
+        resultado["PONTOS_MAXIMOS_DIMENSAO"] = to_numeric(resultado["PONTOS_MAXIMOS_DIMENSAO"], errors="coerce").fillna(0)
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
 
-        # --- GERAR GRÁFICO ---
-        fig, ax = plt.subplots(figsize=(10, 6))
-        x = resultado["DIMENSAO"]
-        ax.plot(x, resultado["REAL_%"], label="Como é", color="navy", marker='o')
-        ax.plot(x, resultado["IDEAL_%"], label="Como deveria ser", color="orange", marker='o')
-
-        for i, v in enumerate(resultado["REAL_%"]):
-            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
-        for i, v in enumerate(resultado["IDEAL_%"]):
-            ax.text(i, v + 1.5, f"{v}%", ha='center', fontsize=8)
-
-        # Linha de referência no gráfico
-        ax.axhline(60, color="gray", linestyle="--", linewidth=1)
-
-        # Limites e marcações do eixo Y
-        ax.set_ylim(0, 100)
-        ax.yaxis.set_major_locator(mticker.MultipleLocator(10))
-
-        # TÍTULO e SUBTÍTULO
-        fig.suptitle("MICROAMBIENTE DE EQUIPES - DIMENSÕES", fontsize=14, weight="bold", y=0.97)
-        # ax.set_title("Autoavaliação do líder - Percentual por dimensão", fontsize=11)
-
-        # Ajuste de layout para não cortar os títulos
-        plt.tight_layout(rect=[0, 0, 1, 0.93])
-
-
-
-
-        numero_avaliacoes = 1
-
-        
-
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        ax.text(0.5, 1.05, f"Empresa: {empresa}", transform=ax.transAxes, ha="center", fontsize=10)
-        ax.text(0.5, 1.01, f"Autoavaliação - Líder: {emailLider} - Rodada: {codrodada} - {data_hora} - |  N = {numero_avaliacoes}",
-                transform=ax.transAxes, ha="center", fontsize=9)
-        
 
-        ax.set_facecolor("#f2f2f2")
-        fig.patch.set_facecolor('#f2f2f2')
-        ax.legend()
-        plt.tight_layout()
-
-        # SALVAR E ENVIAR PARA O DRIVE
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            caminho_pdf = tmp.name
-            plt.savefig(caminho_pdf, format="pdf")
-
-        nome_pdf = f"grafico_microambiente_autoavaliacao_{emailLider}_{codrodada}.pdf"
-        with open(caminho_pdf, "rb") as f:
-            media = MediaIoBaseUpload(f, mimetype="application/pdf")
-            metadata = {"name": nome_pdf, "parents": [id_lider]}
-            service.files().create(body=metadata, media_body=media).execute()
-
-          
-
-        # Salvar também o JSON com prefixo IA_
         dados_json = {
-            "titulo": "MICROAMBIENTE DE EQUIPES - DIMENSÕES",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "titulo": "AUTOAVALIAÇÃO - DIMENSÕES",
+            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
+            "info_avaliacoes": "Autoavaliação do Líder",
             "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
         }
-        salvar_json_ia_no_drive(dados_json, nome_pdf, service, id_lider)
 
-        os.remove(caminho_pdf)
-        return jsonify({"mensagem": "✅ Gráfico gerado e salvo no Drive com sucesso."})
-
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
+        return jsonify(dados_json), 200
 
     except Exception as e:
         import traceback
-        print("❌ ERRO NA ROTA /salvar-grafico-autoavaliacao:")
+        print("\n" + "="*60)
+        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-autoavaliacao")
+        print(f"Tipo: {type(e).__name__}")
+        print(f"Mensagem: {str(e)}")
         traceback.print_exc()
-        return jsonify({"erro": str(e)}), 500
+        print("="*60 + "\n")
+        return jsonify({"erro": str(e), "debug_info": "Verifique os logs para detalhes."}), 500
 
 
 @app.route("/salvar-grafico-autoavaliacao-subdimensao", methods=["POST"])
