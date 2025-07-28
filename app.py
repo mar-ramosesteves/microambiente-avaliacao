@@ -754,6 +754,10 @@ def salvar_grafico_media_equipe_dimensao():
             return jsonify({"erro": "Consolidado de microambiente não encontrado no Supabase para os dados fornecidos."}), 404
 
         microambiente_consolidado = consolidated_data_list[-1] 
+        print(f"DEBUG: Conteúdo de microambiente_consolidado (após fetch): {microambiente_consolidado}")
+        print(f"DEBUG: Conteúdo de respostas_auto: {respostas_auto}")
+        print(f"DEBUG: Conteúdo de avaliacoes (equipe): {avaliacoes}")
+        print(f"DEBUG: len(avaliacoes): {len(avaliacoes)}")
         
         respostas_auto = microambiente_consolidado.get("autoavaliacao", {})
         avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", []) 
