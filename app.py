@@ -374,6 +374,7 @@ def salvar_grafico_autoavaliacao():
         from statistics import mean
         import requests
         from datetime import datetime, timedelta
+        from pandas import DataFrame, to_numeric
 
         dados = request.get_json()
         empresa = dados.get("empresa")
@@ -413,7 +414,6 @@ def salvar_grafico_autoavaliacao():
                     print("✅ Cache válido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
 
-        # Buscar consolidado
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
         headers_consolidado = {
             "apikey": SUPABASE_KEY,
@@ -424,6 +424,7 @@ def salvar_grafico_autoavaliacao():
             "codrodada": f"eq.{codrodada}",
             "emaillider": f"eq.{emaillider_req}"
         }
+
         print(f"DEBUG: Buscando consolidado microambiente para {empresa}, rodada {codrodada}, líder {emaillider_req}")
         response = requests.get(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
         response.raise_for_status()
@@ -434,12 +435,8 @@ def salvar_grafico_autoavaliacao():
         dados_consolidado = data_list[-1].get("dados_json", {})
         respostas_auto = dados_consolidado.get("autoavaliacao", {})
 
-
-
-	matriz = MATRIZ_MICROAMBIENTE_DF
+        matriz = MATRIZ_MICROAMBIENTE_DF
         pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF
-
-        from pandas import DataFrame, to_numeric
 
         calculo = []
         for i in range(1, 49):
