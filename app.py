@@ -756,8 +756,9 @@ def salvar_grafico_media_equipe_dimensao():
         microambiente_consolidado = consolidated_data_list[-1] 
         
         
-        respostas_auto = microambiente_consolidado.get("autoavaliacao", {})
-        avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", []) 
+        # Extrair respostas para autoavaliação e equipe do JSON consolidado ANINHADO
+        respostas_auto = dados_do_consolidado.get("autoavaliacao", {})
+        avaliacoes = dados_do_consolidado.get("avaliacoesEquipe", []) # Variável 'avaliacoes' para o loop de cálculo
 
 
         print(f"DEBUG: Conteúdo de microambiente_consolidado (após fetch): {microambiente_consolidado}")
