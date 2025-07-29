@@ -1612,7 +1612,8 @@ def salvar_grafico_termometro_gaps():
         
         with open(caminho_png, "rb") as f:
             imagem_base64 = base64.b64encode(f.read()).decode("utf-8")
-        
+        dados_json["imagemBase64"] = f"data:image/png;base64,{imagem_base64}"
+
         dados_json = {
             "titulo": "STATUS - TERMÔMETRO DE MICROAMBIENTE",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y %H:%M')}",
