@@ -7,7 +7,7 @@ from flask_cors import CORS # Não precisa de cross_origin aqui se usar CORS(app
 from datetime import datetime, timedelta
 import traceback
 from statistics import mean # Mantenha esta se você a utiliza em cálculos
-
+import base64
 
 # --- 1. DEFINIÇÃO DE VARIÁVEIS DE AMBIENTE GLOBAIS (DEVE ESTAR AQUI) ---
 SUPABASE_REST_URL = os.environ.get("SUPABASE_REST_URL")
