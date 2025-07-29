@@ -963,6 +963,7 @@ def salvar_grafico_waterfall_gaps():
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
         return response
 
+
     try:
         import pandas as pd
         from flask import request, jsonify
@@ -1066,25 +1067,32 @@ def salvar_grafico_waterfall_gaps():
         gap_subdim = base.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                # --- CONSTRUIR JSON DE RETORNO ---
         dados_json = {
             "titulo": "GAP MÉDIO POR DIMENSÃO E SUBDIMENSÃO",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
             "dados": {
                 "dimensao": gap_dim.to_dict(orient="records"),
                 "subdimensao": gap_subdim.to_dict(orient="records")
             }
         }
 
-        # Salva o JSON no Supabase
-        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, tipo_relatorio_grafico_atual)
-        return jsonify(dados_json), 200
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, "microambiente_waterfall_gaps")
+
+        # ✅ RESPOSTA COM CORS OK
+        response = jsonify(dados_json)
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        return response, 200
 
     except Exception as e:
         import traceback
-        print("\n🚨 ERRO CRÍTICO EM /salvar-grafico-waterfall-gaps 🚨")
-        print(f"Erro: {e}")
+        print("\n" + "="*60)
+        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-waterfall-gaps")
+        print(f"Tipo: {type(e).__name__}")
+        print(f"Mensagem: {str(e)}")
         traceback.print_exc()
-        return jsonify({"erro": str(e)}), 500
+        print("="*60 + "\n")
+        return jsonify({"erro": str(e), "debug_info": "Verifique os logs para detalhes."}), 500
 
 
 
