@@ -1603,6 +1603,13 @@ def salvar_grafico_termometro_gaps():
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         import base64
 
+
+        nome_arquivo_png = f"termometro_microambiente_{emailLider}_{codrodada}.png"
+        caminho_png = f"/tmp/{nome_arquivo_png}"
+        plt.savefig(caminho_png, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        
         with open(caminho_png, "rb") as f:
             imagem_base64 = base64.b64encode(f.read()).decode("utf-8")
         
