@@ -961,22 +961,19 @@ def salvar_grafico_waterfall_gaps():
         response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-        return response
-
+        return response, 200
 
     try:
-        import pandas as pd
-        from flask import request, jsonify
-        from datetime import datetime, timedelta
-        from statistics import mean
+        # ... sua lógica principal (já está pronta)
 
-        dados = request.get_json()
-        empresa = dados.get("empresa")
-        codrodada = dados.get("codrodada")
-        emailLider = dados.get("emailLider")
+        response = jsonify(dados_json)
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        return response, 200
 
-        if not all([empresa, codrodada, emailLider]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"erro": str(e)}), 500
 
         # Tipo de relatório
         tipo_relatorio_grafico_atual = "microambiente_waterfall_gaps"
