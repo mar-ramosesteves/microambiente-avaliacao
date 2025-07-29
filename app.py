@@ -1496,26 +1496,23 @@ def relatorio_analitico_microambiente():
 
 
 
-@app.route("/termometro-microambiente", methods=["POST", "OPTIONS"])
-def termometro_microambiente():
-    from flask import request, jsonify
-
+@app.route("/salvar-grafico-termometro-gaps", methods=["POST", "OPTIONS"])
+def salvar_grafico_termometro_gaps():
     if request.method == "OPTIONS":
-        return '', 204
-
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-    import matplotlib.cm as cm
-    import matplotlib.colors as mcolors
-    import numpy as np
-    import json, io, os, tempfile
-    from datetime import datetime
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+        response = jsonify({'status': 'CORS preflight OK'})
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
 
     try:
+        import pandas as pd
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import matplotlib.cm as cm
+        import requests
+        from datetime import datetime, timedelta
+
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
@@ -1524,235 +1521,113 @@ def termometro_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # Autenticação com o Google Drive
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-            scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=creds)
-        PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
+        tipo_relatorio = "microambiente_termometro_gaps"
 
-        def buscar_id(nome, pai):
-            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
-            return resp[0]["id"] if resp else None
+        # --- Buscar cache no Supabase ---
+        url_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        params = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emailLider}",
+            "tipo_relatorio": f"eq.{tipo_relatorio}",
+            "order": "data_criacao.desc",
+            "limit": 1
+        }
 
-        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emailLider.lower(), id_rodada)
+        resp = requests.get(url_cache, headers=headers, params=params, timeout=15)
+        resp.raise_for_status()
+        dados_cache = resp.json()
 
-        if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+        if dados_cache:
+            data_criacao_str = dados_cache[0].get("data_criacao", "")
+            if data_criacao_str:
+                data_criacao = datetime.fromisoformat(data_criacao_str.replace("Z", "+00:00"))
+                if datetime.now(data_criacao.tzinfo) - data_criacao < timedelta(hours=1):
+                    return jsonify(dados_cache[0].get("dados_json", {})), 200
 
-        arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)").execute().get("files", [])
+        # --- Buscar consolidado ---
+        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
+        params_cons = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emailLider}"
+        }
 
-        dados_equipes = []
-        for arq in arquivos:
-            nome = arq["name"]
-            if "microambiente" in nome and emailLider in nome and codrodada in nome:
-                req = service.files().get_media(fileId=arq["id"])
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
-                conteudo = json.load(fh)
-                for bloco in conteudo.get("avaliacoesEquipe", []):
-                    if bloco.get("tipo") == "microambiente_equipe":
-                        dados_equipes.append(bloco)
+        resp = requests.get(url_consolidado, headers=headers, params=params_cons, timeout=30)
+        resp.raise_for_status()
+        dados = resp.json()
 
-        if not dados_equipes:
+        if not dados:
+            return jsonify({"erro": "Consolidado não encontrado."}), 404
+
+        consolidado = dados[-1].get("dados_json", {})
+        avaliacoes = consolidado.get("avaliacoesEquipe", [])
+        if not avaliacoes:
             return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
-        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-
-        somas = {}
-        for av in dados_equipes:
-            for i in range(1, 49):
-                q = f"Q{i:02d}"
-                ideal = int(av.get(f"{q}k", 0))
-                real = int(av.get(f"{q}C", 0))
-                if q not in somas:
-                    somas[q] = {"ideal": 0, "real": 0}
-                somas[q]["ideal"] += ideal
-                somas[q]["real"] += real
-
-        num_avaliacoes = len(dados_equipes)
+        matriz = MATRIZ_MICROAMBIENTE_DF
         gap_count = 0
+        num_avaliacoes = len(avaliacoes)
 
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
-            media_real = round(somas[q]["real"] / num_avaliacoes)
+            reais = [int(av.get(f"{q}C", 0)) for av in avaliacoes if str(av.get(f"{q}C", "")).isdigit()]
+            ideais = [int(av.get(f"{q}k", 0)) for av in avaliacoes if str(av.get(f"{q}k", "")).isdigit()]
+            if not reais or not ideais:
+                continue
+            media_real = round(sum(reais) / len(reais))
+            media_ideal = round(sum(ideais) / len(ideais))
             chave = f"{q}_I{media_ideal}_R{media_real}"
             linha = matriz[matriz["CHAVE"] == chave]
-            if not linha.empty:
-                gap = float(linha.iloc[0]["GAP"])
-                if abs(gap) > 20:
-                    gap_count += 1
+            if not linha.empty and abs(float(linha.iloc[0]["GAP"])) > 20:
+                gap_count += 1
 
         def classificar_microambiente(gaps):
             if gaps <= 3:
-                return "ALTO ESTÍMULO", "green"
+                return "ALTO ESTÍMULO"
             elif gaps <= 6:
-                return "ESTÍMULO", "limegreen"
+                return "ESTÍMULO"
             elif gaps <= 9:
-                return "NEUTRO", "orange"
+                return "NEUTRO"
             elif gaps <= 12:
-                return "BAIXO ESTÍMULO", "orangered"
+                return "BAIXO ESTÍMULO"
             else:
-                return "DESMOTIVAÇÃO", "red"
+                return "DESMOTIVAÇÃO"
 
-        classificacao_texto, cor_texto = classificar_microambiente(gap_count)
+        classificacao_texto = classificar_microambiente(gap_count)
 
-        # Velocímetro semicircular
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.axis("off")
-
-        total_gaps = 48
-        angulo = np.linspace(0, np.pi, 500)
-        raio = 1
-        x = raio * np.cos(angulo)
-        y = raio * np.sin(angulo)
-        ax.plot(x, y, color='black', linewidth=2)
-
-        cmap = cm.get_cmap('RdYlBu')
-
-        cores = [cmap(i / total_gaps) for i in range(total_gaps + 1)]
-
-        for i in range(total_gaps):
-            start_ang = np.pi * i / total_gaps
-            end_ang = np.pi * (i + 1) / total_gaps
-            x_arc = [0] + list(raio * np.cos(np.linspace(start_ang, end_ang, 10)))
-            y_arc = [0] + list(raio * np.sin(np.linspace(start_ang, end_ang, 10)))
-            ax.fill(x_arc, y_arc, color=cores[i], edgecolor='none')
-
-        ponteiro_ang = np.pi * (1 - gap_count / total_gaps)
-
-        ax.plot([0, raio * np.cos(ponteiro_ang)], [0, raio * np.sin(ponteiro_ang)], color='black', linewidth=2)
-
-        # Palavras dentro do velocímetro (posições específicas)
-        faixas = [
-            (4, "ALTO ESTÍMULO"),
-            (8, "ESTÍMULO"),
-            (13, "NEUTRO"),
-            (17, "BAIXO ESTÍMULO"),
-            (28, "DESMOTIVAÇÃO➜")
-        ]
-
-        for val, label in faixas:
-            ang = np.pi * (1 - val / total_gaps)
-            x = 0.7 * raio * np.cos(ang)
-            y = 0.7 * raio * np.sin(ang)
-
-            # ⚠️ Se for o label "DESMOTIVAÇÃO ➜", ajusta a posição para a esquerda
-            if "DESMOTIVAÇÃO" in label:
-                x -= 0.4  # desloca levemente à esquerda
-
-            ax.text(x, y, label, fontsize=9, ha='center', va='center', weight='bold')
-
-        
-
-
-
-        # Marcação da escala de 0 a 48 ao longo do arco
-        for val in range(0, total_gaps + 1):  # total_gaps = 48
-            ang = np.pi * (1 - val / total_gaps)  # esquerda (0) → direita (48)
-            ax.text(
-                1.05 * raio * np.cos(ang),
-                1.05 * raio * np.sin(ang),
-                str(val),
-                fontsize=6,
-                ha='center',
-                va='center'
-            )
-
-
-        ax.text(0, -0.2, f"{gap_count} GAPs ({(gap_count/48)*100:.1f}%)", ha='center', fontsize=12, weight='bold')
-        ax.text(0, -0.35, f"Microambiente: {classificacao_texto}", ha='center', fontsize=11, color=cor_texto, weight='bold')
-
-        nome_pdf = f"termometro_microambiente_{emailLider}_{codrodada}.pdf"
-        caminho_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
-        fig.suptitle("STATUS - MICROAMBIENTE DE EQUIPE - QTD GAPS ACIMA DE 20%", fontsize=13, weight="bold")
-        fig.text(0.2, 0.1, f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
-        plt.savefig(caminho_pdf, bbox_inches='tight')
-        plt.close()
-
-        file_metadata = {"name": nome_pdf, "parents": [id_lider]}
-        media = MediaIoBaseUpload(open(caminho_pdf, "rb"), mimetype="application/pdf")
-        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-                # Salvar também o JSON com prefixo IA_ na subpasta ia_json
-        id_pasta_ia = buscar_id("ia_json", id_lider)
-        if not id_pasta_ia:
-            pasta = service.files().create(
-                body={"name": "ia_json", "mimeType": "application/vnd.google-apps.folder", "parents": [id_lider]},
-                fields="id"
-            ).execute()
-            id_pasta_ia = pasta["id"]
-
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         dados_json = {
             "titulo": "STATUS - TERMÔMETRO DE MICROAMBIENTE",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}",
-            "numeroAvaliacoes": num_avaliacoes,
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "info_avaliacoes": f"Equipe: {num_avaliacoes} respondentes",
             "qtdGapsAcima20": gap_count,
             "porcentagemGaps": round((gap_count / 48) * 100, 1),
             "classificacao": classificacao_texto
         }
 
-        conteudo_json = json.dumps(dados_json, ensure_ascii=False, indent=2).encode("utf-8")
-        nome_json = f"IA_termometro_microambiente_{emailLider}_{codrodada}.json"
-        media_json = MediaIoBaseUpload(io.BytesIO(conteudo_json), mimetype="application/json")
-        service.files().create(
-            body={"name": nome_json, "parents": [id_pasta_ia]},
-            media_body=media_json,
-            fields="id"
-        ).execute()
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, tipo_relatorio)
 
-        return jsonify({"mensagem": f"✅ Termômetro salvo no Google Drive: {nome_pdf}"}), 200
-
+        response = jsonify(dados_json)
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        return response, 200
 
     except Exception as e:
-        return jsonify({"erro": str(e)}), 500
-
-
-def salvar_json_ia_no_drive(dados, nome_pdf, service, id_lider):
-    try:
-        from io import BytesIO
-        import json
-        from googleapiclient.http import MediaIoBaseUpload
-
-        # Criar subpasta "ia_json" se não existir
-        query = f"'{id_lider}' in parents and name = 'ia_json' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-        resposta = service.files().list(q=query, fields="files(id)").execute().get("files", [])
-        if resposta:
-            id_subpasta = resposta[0]["id"]
-        else:
-            pasta_metadata = {
-                "name": "ia_json",
-                "mimeType": "application/vnd.google-apps.folder",
-                "parents": [id_lider]
-            }
-            id_subpasta = service.files().create(body=pasta_metadata, fields="id").execute()["id"]
-
-        # Prefixar com "IA_" e trocar extensão
-        nome_json = "IA_" + nome_pdf.replace(".pdf", ".json")
-
-        # Converter os dados em bytes
-        conteudo = BytesIO(json.dumps(dados, indent=2, ensure_ascii=False).encode("utf-8"))
-        media = MediaIoBaseUpload(conteudo, mimetype="application/json")
-
-        # Enviar para subpasta "ia_json"
-        file_metadata = {"name": nome_json, "parents": [id_subpasta]}
-        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-        print(f"✅ JSON IA salvo com sucesso: {nome_json}")
-    except Exception as e:
-        print("❌ Erro ao salvar JSON IA:", str(e))
+        import traceback
+        print("\n" + "="*60)
+        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-termometro-gaps")
+        print(f"Tipo: {type(e).__name__}")
+        print(f"Mensagem: {str(e)}")
+        traceback.print_exc()
+        print("="*60 + "\n")
+        return jsonify({
+            "erro": str(e),
+            "debug_info": "Verifique os logs para detalhes."
+        }), 500
 
 
 
