@@ -961,136 +961,132 @@ def salvar_grafico_waterfall_gaps():
         response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-        return response, 200
+        return response
 
     try:
-        # ... sua lógica principal (já está pronta)
+        import pandas as pd
+        import requests
+        from datetime import datetime, timedelta
 
-        response = jsonify(dados_json)
-        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
-        return response, 200
+        dados = request.get_json()
+        empresa = dados.get("empresa")
+        codrodada = dados.get("codrodada")
+        emailLider = dados.get("emailLider")
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"erro": str(e)}), 500
+        if not all([empresa, codrodada, emailLider]):
+            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # Tipo de relatório
-        tipo_relatorio_grafico_atual = "microambiente_waterfall_gaps"
+        tipo_relatorio = "microambiente_waterfall_gaps"
 
-        # Verifica cache no Supabase
-        url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
-        headers_cache = {
+        # --- Buscar cache no Supabase ---
+        url_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
+        headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
-        params_cache = {
+        params = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
             "emaillider": f"eq.{emailLider}",
-            "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
+            "tipo_relatorio": f"eq.{tipo_relatorio}",
             "order": "data_criacao.desc",
             "limit": 1
         }
 
-        import requests
-        print(f"DEBUG: Verificando cache existente no Supabase...")
-        cache_response = requests.get(url_busca_cache, headers=headers_cache, params=params_cache, timeout=15)
-        cache_response.raise_for_status()
-        cached_data = cache_response.json()
+        print(f"DEBUG: Buscando cache waterfall gaps...")
+        resp = requests.get(url_cache, headers=headers, params=params, timeout=15)
+        resp.raise_for_status()
+        dados_cache = resp.json()
 
-        if cached_data:
-            data_criacao = cached_data[0].get("data_criacao")
-            if data_criacao:
-                from datetime import datetime
-                data_cache = datetime.fromisoformat(data_criacao.replace('Z', '+00:00'))
-                if datetime.now(data_cache.tzinfo) - data_cache < timedelta(hours=1):
-                    print("✅ Cache válido encontrado. Retornando JSON.")
-                    return jsonify(cached_data[0].get("dados_json", {})), 200
+        if dados_cache:
+            data_criacao_str = dados_cache[0].get("data_criacao", "")
+            if data_criacao_str:
+                data_criacao = datetime.fromisoformat(data_criacao_str.replace("Z", "+00:00"))
+                if datetime.now(data_criacao.tzinfo) - data_criacao < timedelta(hours=1):
+                    print("✅ Cache válido encontrado. Retornando.")
+                    return jsonify(dados_cache[0].get("dados_json", {})), 200
 
-        # Buscar dados no consolidado_microambiente
+        # --- Buscar consolidado no Supabase ---
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
-        params_cons = {
+        params_consolidado = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
             "emaillider": f"eq.{emailLider}"
         }
 
-        print("DEBUG: Buscando consolidado_microambiente no Supabase...")
-        cons_response = requests.get(url_consolidado, headers=headers_cache, params=params_cons, timeout=30)
-        cons_response.raise_for_status()
-        cons_data = cons_response.json()
-        if not cons_data:
+        print(f"DEBUG: Buscando consolidado para {empresa}/{codrodada}/{emailLider}")
+        resp = requests.get(url_consolidado, headers=headers, params=params_consolidado, timeout=30)
+        resp.raise_for_status()
+        dados = resp.json()
+
+        if not dados:
             return jsonify({"erro": "Consolidado não encontrado."}), 404
 
-        dados_consolidado = cons_data[-1].get("dados_json", {})
-        avaliacoes = dados_consolidado.get("avaliacoesEquipe", [])
+        consolidado = dados[-1].get("dados_json", {})
+        avaliacoes = consolidado.get("avaliacoesEquipe", [])
         if not avaliacoes:
-            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 400
+            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
-        matriz = MATRIZ_MICROAMBIENTE_DF  # Já carregada globalmente
+        print(f"DEBUG: Total de avaliações equipe: {len(avaliacoes)}")
+
+        # --- Carregar matriz local (global no app) ---
+        matriz = MATRIZ_MICROAMBIENTE_DF
+
+        # --- Cálculo dos GAPs ---
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            q_ideal = f"{q}k"
-            q_real = f"{q}C"
+            reais = [int(av.get(f"{q}C", 0)) for av in avaliacoes if str(av.get(f"{q}C", "")).isdigit()]
+            ideais = [int(av.get(f"{q}k", 0)) for av in avaliacoes if str(av.get(f"{q}k", "")).isdigit()]
+            if not reais or not ideais:
+                continue
 
-            valores_ideal = []
-            valores_real = []
-            for av in avaliacoes:
-                vi = av.get(q_ideal)
-                vr = av.get(q_real)
-                if isinstance(vi, str) and vi.strip().isdigit():
-                    valores_ideal.append(int(vi))
-                if isinstance(vr, str) and vr.strip().isdigit():
-                    valores_real.append(int(vr))
-
-            mi = round(mean(valores_ideal)) if valores_ideal else 0
-            mr = round(mean(valores_real)) if valores_real else 0
-            chave = f"{q}_I{mi}_R{mr}"
-
+            media_real = round(sum(reais) / len(reais))
+            media_ideal = round(sum(ideais) / len(ideais))
+            chave = f"{q}_I{media_ideal}_R{media_real}"
             linha = matriz[matriz["CHAVE"] == chave]
+
             if not linha.empty:
                 row = linha.iloc[0]
                 registros.append({
                     "QUESTAO": q,
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "GAP": float(row["GAP"])
+                    "GAP": row["GAP"]
                 })
 
-        base = pd.DataFrame(registros)
-        gap_dim = base.groupby("DIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
-        gap_subdim = base.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
+        df = pd.DataFrame(registros)
+        gap_dim = df.groupby("DIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
+        gap_sub = df.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
+
+        print("DEBUG: GAP por dimensão:", gap_dim.to_dict(orient="records"))
+        print("DEBUG: GAP por subdimensão:", gap_sub.to_dict(orient="records"))
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-        
-        print("DEBUG: gap_dim calculado:", gap_dim)
-        print("DEBUG: gap_subdim calculado:", gap_subdim)
-
-        
-        # --- CONSTRUIR JSON DE RETORNO ---
         dados_json = {
             "titulo": "GAP MÉDIO POR DIMENSÃO E SUBDIMENSÃO",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "info_avaliacoes": f"Equipe: {len(avaliacoes)} respondentes",
             "dados": {
                 "dimensao": gap_dim.to_dict(orient="records"),
-                "subdimensao": gap_subdim.to_dict(orient="records")
+                "subdimensao": gap_sub.to_dict(orient="records")
             }
         }
 
-        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, "microambiente_waterfall_gaps")
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, tipo_relatorio)
 
-        
-    
-        # só aqui você cria e retorna
         response = jsonify(dados_json)
         response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
         return response, 200
+
     except Exception as e:
         import traceback
+        print("\n" + "="*60)
+        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-waterfall-gaps")
+        print(f"Tipo: {type(e).__name__}")
+        print(f"Mensagem: {str(e)}")
         traceback.print_exc()
+        print("="*60 + "\n")
         return jsonify({
             "erro": str(e),
             "debug_info": "Verifique os logs para detalhes."
