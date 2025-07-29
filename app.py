@@ -1635,10 +1635,13 @@ def salvar_grafico_termometro_gaps():
             chave = f"{q}_I{media_ideal}_R{media_real}"
             
             linha = matriz[matriz["CHAVE"] == chave]
+            
             if not linha.empty:
                 # O GAP na sua tabela é uma string, converta para float de forma segura
-                gap_val = pd.to_numeric(linha.iloc[0]["GAP"], errors='coerce').fillna(0).item()
-                if abs(float(gap_val)) > 20: # Use float(gap_val) para garantir que é numérico
+                # --- CORREÇÃO: Simplificar a conversão de gap_val ---
+                gap_val = float(linha.iloc[0]["GAP"]) # Converte diretamente para float
+                # --- FIM DA CORREÇÃO ---
+                if abs(gap_val) > 20: # Usa o gap_val já numérico
                     gap_count += 1
 
         def classificar_microambiente(gaps):
