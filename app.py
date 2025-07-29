@@ -1059,6 +1059,49 @@ def salvar_grafico_waterfall_gaps():
         gap_dim = df.groupby("DIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
         gap_sub = df.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
 
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import matplotlib.ticker as mticker
+        
+        fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 7))  # Altura reduzida
+        
+        # Função de cor condicional
+        def get_gap_colors(gaps):
+            return ['#FFA07A' if abs(g) > 20 else '#ADD8E6' for g in gaps]  # Laranja claro / Azul claro
+        
+        # --- GRÁFICO 1: Dimensões ---
+        sns.barplot(x="DIMENSAO", y="GAP", data=gap_dim, palette=get_gap_colors(gap_dim["GAP"]), ax=ax1)
+        ax1.set_title("GAP por Dimensão", fontsize=13)
+        ax1.set_ylabel("GAP (%)")
+        ax1.set_ylim(-100, 0)
+        ax1.yaxis.set_major_locator(mticker.MultipleLocator(10))
+        ax1.tick_params(axis='x', rotation=45)
+        for bar in ax1.patches:
+            h = bar.get_height()
+            ax1.annotate(f'{h:.1f}%', (bar.get_x() + bar.get_width() / 2, h - 3), ha='center', fontsize=8)
+        
+        # --- GRÁFICO 2: Subdimensões ---
+        sns.barplot(x="SUBDIMENSAO", y="GAP", data=gap_sub, palette=get_gap_colors(gap_sub["GAP"]), ax=ax2)
+        ax2.set_title("GAP por Subdimensão", fontsize=13)
+        ax2.set_ylabel("GAP (%)")
+        ax2.set_ylim(-100, 0)
+        ax2.yaxis.set_major_locator(mticker.MultipleLocator(10))
+        ax2.tick_params(axis='x', rotation=90)
+        for bar in ax2.patches:
+            h = bar.get_height()
+            ax2.annotate(f'{h:.1f}%', (bar.get_x() + bar.get_width() / 2, h - 3), ha='center', fontsize=7)
+        
+        # --- Legenda personalizada ---
+        fig.legend(["GAP > 20% = Laranja claro", "GAP ≤ 20% = Azul claro"],
+                   loc='upper center', ncol=2, fontsize=9, bbox_to_anchor=(0.5, 1.02))
+        
+        # --- Ajustes e salvamento ---
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        nome_arquivo_png = f"waterfall_gaps_{emailLider}_{codrodada}.png"
+        caminho_png = f"/tmp/{nome_arquivo_png}"
+        plt.savefig(caminho_png, dpi=300, bbox_inches='tight')
+
+
         print("DEBUG: GAP por dimensão:", gap_dim.to_dict(orient="records"))
         print("DEBUG: GAP por subdimensão:", gap_sub.to_dict(orient="records"))
 
