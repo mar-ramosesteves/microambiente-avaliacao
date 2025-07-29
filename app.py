@@ -1601,20 +1601,27 @@ def salvar_grafico_termometro_gaps():
         classificacao_texto = classificar_microambiente(gap_count)
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+        import base64
+
+        with open(caminho_png, "rb") as f:
+            imagem_base64 = base64.b64encode(f.read()).decode("utf-8")
+        
         dados_json = {
             "titulo": "STATUS - TERMÔMETRO DE MICROAMBIENTE",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y %H:%M')}",
             "info_avaliacoes": f"Equipe: {num_avaliacoes} respondentes",
             "qtdGapsAcima20": gap_count,
             "porcentagemGaps": round((gap_count / 48) * 100, 1),
-            "classificacao": classificacao_texto
+            "classificacao": classificacao_texto,
+            "imagemBase64": f"data:image/png;base64,{imagem_base64}"
         }
-
+        
         salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, tipo_relatorio)
-
+        
         response = jsonify(dados_json)
         response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
         return response, 200
+
 
     except Exception as e:
         import traceback
