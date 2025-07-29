@@ -1082,21 +1082,19 @@ def salvar_grafico_waterfall_gaps():
 
         salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, "microambiente_waterfall_gaps")
 
-        # ✅ RESPOSTA COM CORS OK
-        try:
-    # ... (todo o seu código que monta o dados_json)
+        
     
-    # só aqui você cria e retorna
-    response = jsonify(dados_json)
-    response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
-    return response, 200
-except Exception as e:
-    import traceback
-    traceback.print_exc()
-    return jsonify({
-        "erro": str(e),
-        "debug_info": "Verifique os logs para detalhes."
-    }), 500
+        # só aqui você cria e retorna
+        response = jsonify(dados_json)
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        return response, 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "erro": str(e),
+            "debug_info": "Verifique os logs para detalhes."
+        }), 500
 
 
 
