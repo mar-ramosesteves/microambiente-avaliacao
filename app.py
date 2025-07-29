@@ -954,20 +954,21 @@ def salvar_grafico_media_equipe_subdimensao():
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/grafico-waterfall-gaps", methods=["POST"])
-def grafico_waterfall_gaps():
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import matplotlib.ticker as mticker
-    import seaborn as sns
-    import json, io, os
-    from flask import request, jsonify
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
-    from google.oauth2 import service_account
+@app.route("/salvar-grafico-waterfall-gaps", methods=["POST", "OPTIONS"])
+def salvar_grafico_waterfall_gaps():
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'CORS preflight OK'})
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
 
     try:
-        # --- REQUISIÇÃO E VALIDAÇÃO ---
+        import pandas as pd
+        from flask import request, jsonify
+        from datetime import datetime, timedelta
+        from statistics import mean
+
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
@@ -976,74 +977,80 @@ def grafico_waterfall_gaps():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # --- CREDENCIAIS E DRIVE ---
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-            scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=creds)
-        PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
-        
-        def buscar_id(nome, pai):
-            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
-            return resp[0]["id"] if resp else None
+        # Tipo de relatório
+        tipo_relatorio_grafico_atual = "microambiente_waterfall_gaps"
 
-        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emailLider.lower(), id_rodada)
+        # Verifica cache no Supabase
+        url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
+        headers_cache = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        params_cache = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emailLider}",
+            "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
+            "order": "data_criacao.desc",
+            "limit": 1
+        }
 
-        if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+        import requests
+        print(f"DEBUG: Verificando cache existente no Supabase...")
+        cache_response = requests.get(url_busca_cache, headers=headers_cache, params=params_cache, timeout=15)
+        cache_response.raise_for_status()
+        cached_data = cache_response.json()
 
-        arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)").execute().get("files", [])
+        if cached_data:
+            data_criacao = cached_data[0].get("data_criacao")
+            if data_criacao:
+                from datetime import datetime
+                data_cache = datetime.fromisoformat(data_criacao.replace('Z', '+00:00'))
+                if datetime.now(data_cache.tzinfo) - data_cache < timedelta(hours=1):
+                    print("✅ Cache válido encontrado. Retornando JSON.")
+                    return jsonify(cached_data[0].get("dados_json", {})), 200
 
-        # --- LOCALIZAR JSON VÁLIDO ---
-        dados_equipes = []
-        for arq in arquivos:
-            nome = arq["name"]
-            if "microambiente" in nome and emailLider in nome and codrodada in nome:
-                req = service.files().get_media(fileId=arq["id"])
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
-                conteudo = json.load(fh)
-                for bloco in conteudo.get("avaliacoesEquipe", []):
-                    if bloco.get("tipo") == "microambiente_equipe":
-                        dados_equipes.append(bloco)
+        # Buscar dados no consolidado_microambiente
+        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
+        params_cons = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emailLider}"
+        }
 
-        if not dados_equipes:
+        print("DEBUG: Buscando consolidado_microambiente no Supabase...")
+        cons_response = requests.get(url_consolidado, headers=headers_cache, params=params_cons, timeout=30)
+        cons_response.raise_for_status()
+        cons_data = cons_response.json()
+        if not cons_data:
+            return jsonify({"erro": "Consolidado não encontrado."}), 404
+
+        dados_consolidado = cons_data[-1].get("dados_json", {})
+        avaliacoes = dados_consolidado.get("avaliacoesEquipe", [])
+        if not avaliacoes:
             return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 400
 
-        num_avaliacoes = len(dados_equipes)
-
-        # --- CARREGAR MATRIZ ---
-        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
-
-        # --- CÁLCULO DE MÉDIAS POR QUESTÃO ---
-        somas = {}
-        for av in dados_equipes:
-            for i in range(1, 49):
-                q = f"Q{i:02d}"
-                ideal = int(av.get(f"{q}k", 0))
-                real = int(av.get(f"{q}C", 0))
-                if q not in somas:
-                    somas[q] = {"ideal": 0, "real": 0}
-                somas[q]["ideal"] += ideal
-                somas[q]["real"] += real
-
+        matriz = MATRIZ_MICROAMBIENTE_DF  # Já carregada globalmente
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
-            media_real = round(somas[q]["real"] / num_avaliacoes)
-            chave = f"{q}_I{media_ideal}_R{media_real}"
+            q_ideal = f"{q}k"
+            q_real = f"{q}C"
+
+            valores_ideal = []
+            valores_real = []
+            for av in avaliacoes:
+                vi = av.get(q_ideal)
+                vr = av.get(q_real)
+                if isinstance(vi, str) and vi.strip().isdigit():
+                    valores_ideal.append(int(vi))
+                if isinstance(vr, str) and vr.strip().isdigit():
+                    valores_real.append(int(vr))
+
+            mi = round(mean(valores_ideal)) if valores_ideal else 0
+            mr = round(mean(valores_real)) if valores_real else 0
+            chave = f"{q}_I{mi}_R{mr}"
+
             linha = matriz[matriz["CHAVE"] == chave]
             if not linha.empty:
                 row = linha.iloc[0]
@@ -1051,78 +1058,32 @@ def grafico_waterfall_gaps():
                     "QUESTAO": q,
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "GAP": row["GAP"]
+                    "GAP": float(row["GAP"])
                 })
 
         base = pd.DataFrame(registros)
         gap_dim = base.groupby("DIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
         gap_subdim = base.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
 
-        # --- PLOTAGEM ---
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        import matplotlib.ticker as mticker
-
-        fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 10))
-
-        sns.barplot(x="DIMENSAO", y="GAP", data=gap_dim, palette="coolwarm", ax=ax1)
-        ax1.set_title("Waterfall - GAP por Dimensão (Média da Equipe)", fontsize=14)
-        ax1.set_ylabel("GAP Médio (%)")
-        ax1.set_ylim(-100, 0)
-        ax1.yaxis.set_major_locator(mticker.MultipleLocator(10))
-        ax1.tick_params(axis='x', rotation=45)
-        for bar in ax1.patches:
-            height = bar.get_height()
-            ax1.annotate(f'{height:.1f}%', (bar.get_x() + bar.get_width() / 2, height - 4),
-                         ha='center', fontsize=8)
-
-        sns.barplot(x="SUBDIMENSAO", y="GAP", data=gap_subdim, palette="viridis", ax=ax2)
-        ax2.set_title("Waterfall - GAP por Subdimensão (Média da Equipe)", fontsize=14)
-        ax2.set_ylabel("GAP Médio (%)")
-        ax2.set_ylim(-100, 0)
-        ax2.yaxis.set_major_locator(mticker.MultipleLocator(10))
-        ax2.tick_params(axis='x', rotation=90)
-        for bar in ax2.patches:
-            height = bar.get_height()
-            ax2.annotate(f'{height:.1f}%', (bar.get_x() + bar.get_width() / 2, height - 4),
-                         ha='center', fontsize=7)
-
-        plt.tight_layout()
-        nome_arquivo = f"waterfall_gaps_{emailLider}_{codrodada}.pdf"
-        caminho_local = f"/tmp/{nome_arquivo}"
-
-        # Inserir rodapé com informações do relatório
-        fig.text(0.11, 0.01, 
-                 f"{empresa} - {emailLider} - {codrodada} - {pd.Timestamp.now().strftime('%d/%m/%Y')}", 
-                 ha='center', va='bottom', fontsize=8, color='gray', style='italic')
-        plt.savefig(caminho_local)
-
-        
-
-
-        # --- UPLOAD PARA O DRIVE ---
-        media = MediaIoBaseUpload(io.BytesIO(open(caminho_local, "rb").read()), mimetype="application/pdf")
-        service.files().create(
-            body={"name": nome_arquivo, "parents": [id_lider]},
-            media_body=media,
-            fields="id"
-        ).execute()
-
-        # Salvar também o JSON com prefixo IA_ na subpasta ia_json
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         dados_json = {
             "titulo": "GAP MÉDIO POR DIMENSÃO E SUBDIMENSÃO",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
+            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
             "dados": {
                 "dimensao": gap_dim.to_dict(orient="records"),
                 "subdimensao": gap_subdim.to_dict(orient="records")
             }
         }
-        salvar_json_ia_no_drive(dados_json, nome_arquivo, service, id_lider)
 
-        return jsonify({"mensagem": f"✅ Gráfico salvo no Drive: {nome_arquivo}"}), 200
-
+        # Salva o JSON no Supabase
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, tipo_relatorio_grafico_atual)
+        return jsonify(dados_json), 200
 
     except Exception as e:
+        import traceback
+        print("\n🚨 ERRO CRÍTICO EM /salvar-grafico-waterfall-gaps 🚨")
+        print(f"Erro: {e}")
+        traceback.print_exc()
         return jsonify({"erro": str(e)}), 500
 
 
