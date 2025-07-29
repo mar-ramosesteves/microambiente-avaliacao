@@ -1064,7 +1064,13 @@ def salvar_grafico_waterfall_gaps():
         gap_subdim = base.groupby("SUBDIMENSAO")["GAP"].mean().reset_index().sort_values("GAP")
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-                # --- CONSTRUIR JSON DE RETORNO ---
+
+        
+        print("DEBUG: gap_dim calculado:", gap_dim)
+        print("DEBUG: gap_subdim calculado:", gap_subdim)
+
+        
+        # --- CONSTRUIR JSON DE RETORNO ---
         dados_json = {
             "titulo": "GAP MÉDIO POR DIMENSÃO E SUBDIMENSÃO",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
@@ -1077,19 +1083,20 @@ def salvar_grafico_waterfall_gaps():
         salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, "microambiente_waterfall_gaps")
 
         # ✅ RESPOSTA COM CORS OK
-        response = jsonify(dados_json)
-        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
-        return response, 200
-
-    except Exception as e:
-        import traceback
-        print("\n" + "="*60)
-        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-waterfall-gaps")
-        print(f"Tipo: {type(e).__name__}")
-        print(f"Mensagem: {str(e)}")
-        traceback.print_exc()
-        print("="*60 + "\n")
-        return jsonify({"erro": str(e), "debug_info": "Verifique os logs para detalhes."}), 500
+        try:
+    # ... (todo o seu código que monta o dados_json)
+    
+    # só aqui você cria e retorna
+    response = jsonify(dados_json)
+    response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+    return response, 200
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+    return jsonify({
+        "erro": str(e),
+        "debug_info": "Verifique os logs para detalhes."
+    }), 500
 
 
 
