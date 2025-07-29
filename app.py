@@ -1506,85 +1506,140 @@ def salvar_grafico_termometro_gaps():
         return response
 
     try:
-        import pandas as pd
+        # Importações necessárias para esta rota (verifique se já existem no topo do app.py)
+        # Removido 'matplotlib.cm' se não for usado
+        import pandas as pd # Já global
         import numpy as np
         import matplotlib.pyplot as plt
-        import matplotlib.cm as cm
         import requests
         from datetime import datetime, timedelta
+        import base64 # Para imagem base64
+        import os # Para os.remove
+        from statistics import mean # Para cálculos de média
 
-        dados = request.get_json()
-        empresa = dados.get("empresa")
-        codrodada = dados.get("codrodada")
-        emailLider = dados.get("emailLider")
+        dados_requisicao = request.get_json()
+        empresa = dados_requisicao.get("empresa")
+        codrodada = dados_requisicao.get("codrodada")
+        emaillider_req = dados_requisicao.get("emailLider") # Usando emaillider_req para consistência
 
-        if not all([empresa, codrodada, emailLider]):
+        if not all([empresa, codrodada, emaillider_req]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        tipo_relatorio = "microambiente_termometro_gaps"
+        # --- Lógica de Caching: Buscar JSON do Gráfico Salvo ---
+        tipo_relatorio_grafico_atual = "microambiente_termometro_gaps" # Identificador único para este gráfico
 
-        # --- Buscar cache no Supabase ---
-        url_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
-        headers = {
+        # SUPABASE_REST_URL e SUPABASE_KEY são variáveis globais
+        url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
+
+        headers_cache_busca = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
-        params = {
+
+        params_cache = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
-            "emaillider": f"eq.{emailLider}",
-            "tipo_relatorio": f"eq.{tipo_relatorio}",
+            "emaillider": f"eq.{emaillider_req}", # Variável emaillider_req
+            "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
             "order": "data_criacao.desc",
             "limit": 1
         }
 
-        resp = requests.get(url_cache, headers=headers, params=params, timeout=15)
-        resp.raise_for_status()
-        dados_cache = resp.json()
+        print(f"DEBUG: Buscando cache do gráfico '{tipo_relatorio_grafico_atual}' no Supabase...")
+        cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
+        cache_response.raise_for_status()
+        cached_data_list = cache_response.json()
 
-        if dados_cache:
-            data_criacao_str = dados_cache[0].get("data_criacao", "")
-            if data_criacao_str:
-                data_criacao = datetime.fromisoformat(data_criacao_str.replace("Z", "+00:00"))
-                if datetime.now(data_criacao.tzinfo) - data_criacao < timedelta(hours=1):
-                    return jsonify(dados_cache[0].get("dados_json", {})), 200
+        if cached_data_list:
+            cached_report = cached_data_list[0]
+            data_criacao_cache_str = cached_report.get("data_criacao", "")
+            
+            if data_criacao_cache_str:
+                data_criacao = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00')) 
+                cache_validity_period = timedelta(hours=1) # Cache válido por 1 hora
 
-        # --- Buscar consolidado ---
-        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
+                if datetime.now(data_criacao.tzinfo) - data_criacao < cache_validity_period:
+                    print(f"✅ Cache válido encontrado para o gráfico '{tipo_relatorio_grafico_atual}'. Retornando dados cacheados.")
+                    return jsonify(cached_report.get("dados_json", {})), 200
+                else:
+                    print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' expirado. Recalculando...")
+            else:
+                print("Cache encontrado, mas sem data de criação válida. Recalculando...")
+        else:
+            print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' não encontrado. Recalculando...")
+
+        # --- Buscar consolidado de microambiente ---
+        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente" # Usando GLOBAL SUPABASE_REST_URL
+        
         params_cons = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
-            "emaillider": f"eq.{emailLider}"
+            "emaillider": f"eq.{emaillider_req}" # Usando emaillider_req
         }
 
-        resp = requests.get(url_consolidado, headers=headers, params=params_cons, timeout=30)
-        resp.raise_for_status()
-        dados = resp.json()
+        print(f"DEBUG: Buscando consolidado de microambiente no Supabase para Empresa: {empresa}, Rodada: {codrodada}, Líder: {emaillider_req}")
+        
+        headers_consolidado_busca = {
+            "apikey": SUPABASE_KEY, # Usando GLOBAL SUPABASE_KEY
+            "Authorization": f"Bearer {SUPABASE_KEY}" # Usando GLOBAL SUPABASE_KEY
+        }
 
-        if not dados:
+        resp_consolidado = requests.get(url_consolidado, headers=headers_consolidado_busca, params=params_cons, timeout=30)
+        resp_consolidado.raise_for_status()
+        dados_consolidado = resp_consolidado.json()
+
+        if not dados_consolidado:
             return jsonify({"erro": "Consolidado não encontrado."}), 404
 
-        consolidado = dados[-1].get("dados_json", {})
-        avaliacoes = consolidado.get("avaliacoesEquipe", [])
+        microambiente_consolidado = dados_consolidado[-1].get("dados_json", {}) # Assumindo que o JSON consolidado está em 'dados_json'
+        
+        # Extrair respostas para autoavaliação e equipe do JSON consolidado ANINHADO
+        avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", [])
+        
         if not avaliacoes:
-            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada no consolidado."}), 400
 
-        matriz = MATRIZ_MICROAMBIENTE_DF
+        # --- Usar DataFrames globais para as matrizes ---
+        matriz = MATRIZ_MICROAMBIENTE_DF # Usando global
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando global
+        pontos_subdim = TABELA_SUBDIMENSAO_MICROAMBIENTE_DF # Usando global para subdimensoes
+
+
         gap_count = 0
         num_avaliacoes = len(avaliacoes)
 
-        for i in range(1, 49):
+        for i in range(1, 49): # Iterar sobre as questões Q01 a Q48
             q = f"Q{i:02d}"
-            reais = [int(av.get(f"{q}C", 0)) for av in avaliacoes if str(av.get(f"{q}C", "")).isdigit()]
-            ideais = [int(av.get(f"{q}k", 0)) for av in avaliacoes if str(av.get(f"{q}k", "")).isdigit()]
+            q_real = f"{q}C"
+            q_ideal = f"{q}k"
+
+            # Converte as respostas para INT de forma segura (para equipe)
+            reais = []
+            for av in avaliacoes:
+                val_str = av.get(q_real)
+                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
+                    reais.append(int(val_str))
+            
+            ideais = []
+            for av in avaliacoes:
+                val_str = av.get(q_ideal)
+                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
+                    ideais.append(int(val_str))
+
             if not reais or not ideais:
-                continue
+                continue # Pula a questão se não houver dados válidos
+
             media_real = round(sum(reais) / len(reais))
             media_ideal = round(sum(ideais) / len(ideais))
+            
             chave = f"{q}_I{media_ideal}_R{media_real}"
+            
             linha = matriz[matriz["CHAVE"] == chave]
-            if not linha.empty and abs(float(linha.iloc[0]["GAP"])) > 20:
-                gap_count += 1
+            if not linha.empty:
+                # O GAP na sua tabela é uma string, converta para float de forma segura
+                gap_val = pd.to_numeric(linha.iloc[0]["GAP"], errors='coerce').fillna(0).item()
+                if abs(float(gap_val)) > 20: # Use float(gap_val) para garantir que é numérico
+                    gap_count += 1
 
         def classificar_microambiente(gaps):
             if gaps <= 3:
@@ -1599,53 +1654,62 @@ def salvar_grafico_termometro_gaps():
                 return "DESMOTIVAÇÃO"
 
         classificacao_texto = classificar_microambiente(gap_count)
-
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        import base64
-
-
-        nome_arquivo_png = f"termometro_microambiente_{emailLider}_{codrodada}.png"
-        caminho_png = f"/tmp/{nome_arquivo_png}"
-        plt.savefig(caminho_png, dpi=300, bbox_inches='tight')
-        plt.close()
-
-        
-        # Após salvar a imagem base64:
-        with open(caminho_png, "rb") as f:
-            imagem_base64 = base64.b64encode(f.read()).decode("utf-8")
         
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        # --- GERAÇÃO DO GRÁFICO (MATPLOTLIB) EM MEMÓRIA E CONVERSÃO PARA BASE64 ---
+        # Este é o código do gráfico que você me enviou no HTML
+        # Ajustado para usar as variáveis e nomes consistentes
         
-        dados_json = {
+        # Ajuste para plotar o termômetro (você deve ter o código que plota o termômetro aqui)
+        # Exemplo de placeholder para plotting (SUBSTITUA PELO SEU CÓDIGO REAL DE PLOTAGEM DO TERMÔMETRO)
+        fig, ax = plt.subplots(figsize=(6, 6)) # Dimensões do termômetro
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 10)
+        ax.text(5, 5, f"GAPs: {gap_count}\nClassificação: {classificacao_texto}", 
+                ha='center', va='center', fontsize=16, color='black')
+        ax.axis('off') # Remove os eixos
+        plt.title(f"TERMÔMETRO DE GAPS\n{empresa} - {codrodada} - {emaillider_req}", fontsize=14)
+        plt.tight_layout()
+        
+        # Salvar o gráfico em um buffer de memória e converter para base64
+        import io # Importar io para BytesIO
+        from PIL import Image # Importar Pillow para lidar com imagem
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight') # Salva em PNG no buffer
+        plt.close(fig) # Fecha a figura para liberar memória
+        buf.seek(0)
+        imagem_base64 = base64.b64encode(buf.read()).decode("utf-8")
+
+
+        dados_json_retorno = { # Renomeado para evitar conflito com 'dados_json' usado no payload
             "titulo": "STATUS - TERMÔMETRO DE MICROAMBIENTE",
-            "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
+            "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
             "info_avaliacoes": f"Equipe: {num_avaliacoes} respondentes",
             "qtdGapsAcima20": gap_count,
             "porcentagemGaps": round((gap_count / 48) * 100, 1),
             "classificacao": classificacao_texto,
-            "imagemBase64": f"data:image/png;base64,{imagem_base64}"
+            "imagemBase64": f"data:image/png;base64,{imagem_base64}" # Prefixo para uso direto no HTML img src
         }
         
-        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, tipo_relatorio)
-        
-        response = jsonify(dados_json)
-        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
-        return response, 200
+        # --- Chamar a função para salvar os dados do gráfico gerados no Supabase ---
+        salvar_json_no_supabase(dados_json_retorno, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
 
+        # Retornando o JSON completo para o navegador
+        return jsonify(dados_json_retorno), 200
 
     except Exception as e:
-        import traceback
-        print("\n" + "="*60)
-        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-termometro-gaps")
-        print(f"Tipo: {type(e).__name__}")
-        print(f"Mensagem: {str(e)}")
+        detailed_traceback = traceback.format_exc()
+        print("\n" + "="*50)
+        print("🚨🚨🚨 ERRO CRÍTICO NA ROTA salvar-grafico-termometro-gaps 🚨🚨🚨")
+        print(f"Tipo do erro: {type(e).__name__}")
+        print(f"Mensagem do erro: {str(e)}")
+        print("TRACEBACK COMPLETO ABAIXO:")
         traceback.print_exc()
-        print("="*60 + "\n")
-        return jsonify({
-            "erro": str(e),
-            "debug_info": "Verifique os logs para detalhes."
-        }), 500
-
+        print("="*50 + "\n")
+        
+        return jsonify({"erro": str(e), "debug_info": "Verifique os logs do Render.com para detalhes."}), 500
 
 
 @app.route("/salvar-consolidado-microambiente", methods=["POST"])
