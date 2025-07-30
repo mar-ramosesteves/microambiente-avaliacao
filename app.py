@@ -1290,26 +1290,20 @@ def relatorio_gaps_por_questao():
 
 # Rota ajustada para gerar o Relatório Analítico de Microambiente com layout refinado
 
-@app.route("/relatorio-analitico-microambiente", methods=["POST", "OPTIONS"])
-def relatorio_analitico_microambiente():
+@app.route("/relatorio-analitico-microambiente-supabase", methods=["POST", "OPTIONS"])
+def relatorio_analitico_microambiente_supabase():
     from flask import request, jsonify
     import pandas as pd
-    import matplotlib.pyplot as plt
-    import json, io, os, tempfile
+    import json
     from datetime import datetime
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import cm
-    from reportlab.pdfgen import canvas
-    from reportlab.platypus import Paragraph, Frame
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib.enums import TA_JUSTIFY
-    from reportlab.lib.colors import red
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+    import traceback
 
     if request.method == "OPTIONS":
-        return '', 204
+        response = jsonify({'status': 'CORS preflight OK'})
+        response.headers["Access-Control-Allow-Origin"] = "https://gestor.thehrkey.tech"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
 
     try:
         dados = request.get_json()
@@ -1320,53 +1314,36 @@ def relatorio_analitico_microambiente():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        SCOPES = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
-            scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=creds)
-        PASTA_RAIZ = "1ekQKwPchEN_fO4AK0eyDd_JID5YO3hAF"
+        # Buscar dados do Supabase
+        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        params = {
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emailLider}"
+        }
 
-        def buscar_id(nome, pai):
-            q = f"'{pai}' in parents and name='{nome}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            resp = service.files().list(q=q, fields="files(id)").execute().get("files", [])
-            return resp[0]["id"] if resp else None
+        response = requests.get(url_consolidado, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        consolidado = response.json()
 
-        id_empresa = buscar_id(empresa.lower(), PASTA_RAIZ)
-        id_rodada = buscar_id(codrodada.lower(), id_empresa)
-        id_lider = buscar_id(emailLider.lower(), id_rodada)
+        if not consolidado:
+            return jsonify({"erro": "Consolidado não encontrado."}), 404
 
-        if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+        microambiente = consolidado[-1].get("dados_json", {})
+        avaliacoes = microambiente.get("avaliacoesEquipe", [])
 
-        arquivos = service.files().list(
-            q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
-            fields="files(id, name)").execute().get("files", [])
-
-        dados_equipes = []
-        for arq in arquivos:
-            nome = arq["name"]
-            if "microambiente" in nome and emailLider in nome and codrodada in nome:
-                req = service.files().get_media(fileId=arq["id"])
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, req)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-                fh.seek(0)
-                conteudo = json.load(fh)
-                for bloco in conteudo.get("avaliacoesEquipe", []):
-                    if bloco.get("tipo") == "microambiente_equipe":
-                        dados_equipes.append(bloco)
-
-        if not dados_equipes:
+        if not avaliacoes:
             return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
-        matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
+        matriz = MATRIZ_MICROAMBIENTE_DF  # DataFrame global carregado previamente
+        num_avaliacoes = len(avaliacoes)
 
         somas = {}
-        for av in dados_equipes:
+        for av in avaliacoes:
             for i in range(1, 49):
                 q = f"Q{i:02d}"
                 ideal = int(av.get(f"{q}k", 0))
@@ -1376,7 +1353,6 @@ def relatorio_analitico_microambiente():
                 somas[q]["ideal"] += ideal
                 somas[q]["real"] += real
 
-        num_avaliacoes = len(dados_equipes)
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
@@ -1384,6 +1360,7 @@ def relatorio_analitico_microambiente():
             media_real = round(somas[q]["real"] / num_avaliacoes)
             chave = f"{q}_I{media_ideal}_R{media_real}"
             linha = matriz[matriz["CHAVE"] == chave]
+
             if not linha.empty:
                 row = linha.iloc[0]
                 registros.append({
@@ -1396,82 +1373,6 @@ def relatorio_analitico_microambiente():
                     "GAP": float(row["GAP"])
                 })
 
-        df = pd.DataFrame(registros)
-        df = df.sort_values(by=["DIMENSAO", "SUBDIMENSAO", "QUESTAO"])
-
-        nome_pdf = f"relatorio_analitico_microambiente_{emailLider}_{codrodada}.pdf"
-        caminho_local = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
-        c = canvas.Canvas(caminho_local, pagesize=A4)
-        width, height = A4
-
-        # --- CAPA ELEGANTE ---
-        c.setFont("Helvetica-Bold", 16)
-        c.drawCentredString(width / 2, height - 3.5 * cm, "RELATÓRIO CONSOLIDADO")
-        c.drawCentredString(width / 2, height - 4.4 * cm, "DE MICROAMBIENTE")
-        c.setFont("Helvetica", 10)
-        subtitulo = f"{empresa} - {emailLider} - {codrodada} - {datetime.now().strftime('%d/%m/%Y')}"
-        c.drawCentredString(width / 2, height - 6 * cm, subtitulo)
-        c.showPage()
-
-        styles = getSampleStyleSheet()
-        estilo_questao = styles["Normal"]
-        estilo_questao.fontName = "Helvetica"
-        estilo_questao.fontSize = 11
-        estilo_questao.leading = 14
-        estilo_questao.alignment = TA_JUSTIFY
-
-        grupo = df.groupby(["DIMENSAO", "SUBDIMENSAO"])
-
-        for (dim, sub), bloco in grupo:
-            c.setFont("Helvetica-Bold", 12)
-            titulo = f"Questões que impactam a dimensão {dim} e subdimensão {sub}"
-            c.drawCentredString(width / 2, height - 2 * cm, titulo)
-            y = height - 4.0 * cm
-            count = 0
-
-            for _, linha in bloco.iterrows():
-                if count == 6:
-                    c.showPage()
-                    c.setFont("Helvetica-Bold", 12)
-                    c.drawCentredString(width / 2, height - 2 * cm, titulo)
-                    y = height - 3.5 * cm
-                    count = 0
-
-                texto_afirmacao = f"{linha['QUESTAO']}: {linha['AFIRMACAO']}"
-                frame = Frame(2 * cm, y - 1.2 * cm, width - 4 * cm, 2 * cm, showBoundary=0)
-                paragrafo = Paragraph(texto_afirmacao, estilo_questao)
-                frame.addFromList([paragrafo], c)
-                y -= 1.0 * cm
-
-                c.setFont("Helvetica", 9)
-                texto = f"Como é: {linha['PONTUACAO_REAL']:.1f}%  |  Como deveria ser: {linha['PONTUACAO_IDEAL']:.1f}%  |  GAP: {linha['GAP']:.1f}%"
-                c.drawString(2.5 * cm, y, texto)
-
-                if abs(linha['GAP']) > 20:
-                    c.setFillColor(red)
-                    c.circle(width - 2 * cm, y + 0.2 * cm, 0.15 * cm, fill=1)
-                    c.setFillColorRGB(0, 0, 0)
-
-                y -= 3.0 * cm
-                count += 1
-
-            c.showPage()
-
-        c.save()
-
-        file_metadata = {"name": nome_pdf, "parents": [id_lider]}
-        media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
-        service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-                # Salvar também o JSON com prefixo IA_ na subpasta ia_json
-        id_pasta_ia = buscar_id("ia_json", id_lider)
-        if not id_pasta_ia:
-            pasta = service.files().create(
-                body={"name": "ia_json", "mimeType": "application/vnd.google-apps.folder", "parents": [id_lider]},
-                fields="id"
-            ).execute()
-            id_pasta_ia = pasta["id"]
-
         dados_json = {
             "titulo": "RELATÓRIO ANALÍTICO DE MICROAMBIENTE",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}",
@@ -1479,20 +1380,18 @@ def relatorio_analitico_microambiente():
             "dados": registros
         }
 
-        conteudo_json = json.dumps(dados_json, ensure_ascii=False, indent=2).encode("utf-8")
-        nome_json = f"IA_relatorio_analitico_microambiente_{emailLider}_{codrodada}.json"
-        media_json = MediaIoBaseUpload(io.BytesIO(conteudo_json), mimetype="application/json")
-        service.files().create(
-            body={"name": nome_json, "parents": [id_pasta_ia]},
-            media_body=media_json,
-            fields="id"
-        ).execute()
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emailLider, "microambiente_analitico")
 
-        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_pdf}"}), 200
-
+        return jsonify(dados_json), 200
 
     except Exception as e:
-        return jsonify({"erro": str(e)}), 500
+        print("\n" + "="*60)
+        print("🚨 ERRO CRÍTICO NA ROTA relatorio-analitico-microambiente-supabase")
+        print(f"Tipo: {type(e).__name__}")
+        print(f"Mensagem: {str(e)}")
+        traceback.print_exc()
+        print("="*60 + "\n")
+        return jsonify({"erro": str(e), "debug_info": "Verifique os logs."}), 500
 
 
 
