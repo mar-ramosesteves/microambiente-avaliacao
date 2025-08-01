@@ -1693,3 +1693,51 @@ def salvar_consolidado_microambiente():
         print("💥 ERRO GERAL:", str(e))
         return jsonify({"erro": str(e)}), 500
 
+
+@app.route("/recuperar-json", methods=["GET", "OPTIONS"])
+def recuperar_json():
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,OPTIONS"
+        return response
+
+    try:
+        empresa = request.args.get("empresa", "").strip().lower()
+        codrodada = request.args.get("codrodada", "").strip().lower()
+        emailLider = request.args.get("emailLider", "").strip().lower()
+        tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
+
+        if not all([empresa, codrodada, emailLider, tipo_relatorio]):
+            return jsonify({"erro": "Parâmetros obrigatórios ausentes"}), 400
+
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+
+        filtro = (
+            f"?empresa=eq.{empresa}"
+            f"&codrodada=eq.{codrodada}"
+            f"&emaillider=eq.{emailLider}"
+            f"&tipo_relatorio=eq.{tipo_relatorio}"
+            f"&order=data_criacao.desc&limit=1"
+        )
+        url = f"{SUPABASE_REST_URL}/relatorios_gerados{filtro}"
+
+        resp = requests.get(url, headers=headers)
+        if resp.status_code != 200:
+            return jsonify({"erro": "Erro ao consultar Supabase"}), 500
+
+        registros = resp.json()
+        if not registros:
+            return jsonify({"erro": "Relatório não encontrado"}), 404
+
+        dados_json = registros[0].get("dados_json", {})
+        return jsonify(dados_json)
+
+    except Exception as e:
+        print("❌ Erro ao recuperar JSON:", e)
+        return jsonify({"erro": str(e)}), 500
+
