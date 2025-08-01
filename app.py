@@ -1709,16 +1709,26 @@ def recuperar_json():
         email_lider = request.args.get("emailLider", "").strip().lower()
         tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
 
+        print("🔍 RECEBIDO NA ROTA /recuperar-json")
+        print("empresa:", empresa)
+        print("codrodada:", rodada)
+        print("email_lider:", email_lider)
+        print("tipo_relatorio:", tipo_relatorio)
+
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
 
-        # 👇 AQUI É A CORREÇÃO
         filtro = f"?empresa=eq.{empresa}&codrodada=eq.{rodada}&emaillider=eq.{email_lider}&tipo_relatorio=eq.{tipo_relatorio}&order=data_criacao.desc&limit=1"
         url = f"{SUPABASE_REST_URL}/relatorios_gerados{filtro}"
 
+        print("🔗 URL Final Supabase:", url)
+
         resp = requests.get(url, headers=headers)
+        print("📦 Status Supabase:", resp.status_code)
+        print("📄 Resposta Supabase:", resp.text)
+
         if resp.status_code != 200 or not resp.json():
             return jsonify({"erro": "Relatório não encontrado"}), 404
 
@@ -1728,9 +1738,7 @@ def recuperar_json():
         return response
 
     except Exception as e:
-        response = jsonify({"erro": str(e)})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 500
+        print("❌ ERRO ao buscar JSON:", str(e))
 
 
 
