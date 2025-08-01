@@ -1697,56 +1697,37 @@ def salvar_consolidado_microambiente():
 @app.route("/recuperar-json", methods=["GET", "OPTIONS"])
 def recuperar_json():
     if request.method == "OPTIONS":
-        response = jsonify({"status": "OK"})
+        response = jsonify({"status": "CORS preflight OK"})
         response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response, 200
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
 
     try:
         empresa = request.args.get("empresa", "").strip().lower()
-        codrodada = request.args.get("codrodada", "").strip().lower()
-        emailLider = request.args.get("emailLider", "").strip().lower()
+        rodada = request.args.get("codrodada", "").strip().lower()
+        email_lider = request.args.get("emailLider", "").strip().lower()
         tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
-
-        if not all([empresa, codrodada, emailLider, tipo_relatorio]):
-            response = jsonify({"erro": "Parâmetros obrigatórios ausentes"})
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            return response, 400
 
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
 
-        filtro = (
-            f"?empresa=eq.{empresa}"
-            f"&codrodada=eq.{codrodada}"
-            f"&emaillider=eq.{emailLider}"
-            f"&tipo_relatorio=eq.{tipo_relatorio}"
-            f"&order=data_criacao.desc&limit=1"
-        )
+        # 👇 AQUI É A CORREÇÃO
+        filtro = f"?empresa=eq.{empresa}&codrodada=eq.{rodada}&emaillider=eq.{email_lider}&tipo_relatorio=eq.{tipo_relatorio}&order=data_criacao.desc&limit=1"
         url = f"{SUPABASE_REST_URL}/relatorios_gerados{filtro}"
 
         resp = requests.get(url, headers=headers)
-        if resp.status_code != 200:
-            response = jsonify({"erro": "Erro ao consultar Supabase"})
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            return response, 500
+        if resp.status_code != 200 or not resp.json():
+            return jsonify({"erro": "Relatório não encontrado"}), 404
 
-        registros = resp.json()
-        if not registros:
-            response = jsonify({"erro": "Relatório não encontrado"})
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            return response, 404
-
-        dados_json = registros[0].get("dados_json", {})
+        dados_json = resp.json()[0].get("dados_json", {})
         response = jsonify(dados_json)
         response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 200
+        return response
 
     except Exception as e:
-        print("❌ Erro ao recuperar JSON:", e)
         response = jsonify({"erro": str(e)})
         response.headers["Access-Control-Allow-Origin"] = "*"
         return response, 500
