@@ -1739,27 +1739,29 @@ def debug_json():
     empresa = request.args.get("empresa", "").strip().lower()
     rodada = request.args.get("codrodada", "").strip().lower()
     email_lider = request.args.get("emailLider", "").strip().lower()
-    tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
+
+    filtro = (
+        f"?empresa=eq.{empresa}"
+        f"&codrodada=eq.{rodada}"
+        f"&emaillider=eq.{email_lider}"
+        f"&order=data_criacao.desc&limit=10"
+    )
+
+    url = f"{SUPABASE_REST_URL}/relatorios_gerados{filtro}"
+    print(f"🔎 URL Supabase: {url}")
 
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}"
     }
 
-    filtro = f"?empresa=eq.{empresa}&codrodada=eq.{rodada}&emaillider=eq.{email_lider}&tipo_relatorio=eq.{tipo_relatorio}&order=data_criacao.desc&limit=1"
-    url = f"{SUPABASE_REST_URL}/relatorios_gerados{filtro}"
-
-    print("🔎 URL Supabase:", url)
-
     resp = requests.get(url, headers=headers)
-    print("📦 Status Supabase:", resp.status_code)
-    print("📄 Resposta Supabase:", resp.text)
+    print(f"📦 Status Supabase: {resp.status_code}")
+    print(f"📄 Resposta Supabase: {resp.text}")
 
-    if resp.status_code != 200:
-        return jsonify({"erro": "Erro ao acessar Supabase", "status": resp.status_code}), 500
+    if resp.status_code == 200:
+        return jsonify(resp.json())
+    else:
+        return jsonify({"erro": "Erro ao consultar Supabase"}), 500
 
-    if not resp.json():
-        return jsonify({"erro": "Nenhum JSON encontrado"}), 404
-
-    return jsonify(resp.json()[0])
 
