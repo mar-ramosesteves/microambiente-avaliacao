@@ -1697,11 +1697,11 @@ def salvar_consolidado_microambiente():
 @app.route("/recuperar-json", methods=["GET", "OPTIONS"])
 def recuperar_json():
     if request.method == "OPTIONS":
-        response = jsonify({"status": "ok"})
+        response = jsonify({"status": "OK"})
         response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET,OPTIONS"
-        return response
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        return response, 200
 
     try:
         empresa = request.args.get("empresa", "").strip().lower()
@@ -1710,7 +1710,9 @@ def recuperar_json():
         tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
 
         if not all([empresa, codrodada, emailLider, tipo_relatorio]):
-            return jsonify({"erro": "Parâmetros obrigatórios ausentes"}), 400
+            response = jsonify({"erro": "Parâmetros obrigatórios ausentes"})
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            return response, 400
 
         headers = {
             "apikey": SUPABASE_KEY,
@@ -1728,16 +1730,24 @@ def recuperar_json():
 
         resp = requests.get(url, headers=headers)
         if resp.status_code != 200:
-            return jsonify({"erro": "Erro ao consultar Supabase"}), 500
+            response = jsonify({"erro": "Erro ao consultar Supabase"})
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            return response, 500
 
         registros = resp.json()
         if not registros:
-            return jsonify({"erro": "Relatório não encontrado"}), 404
+            response = jsonify({"erro": "Relatório não encontrado"})
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            return response, 404
 
         dados_json = registros[0].get("dados_json", {})
-        return jsonify(dados_json)
+        response = jsonify(dados_json)
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response, 200
 
     except Exception as e:
         print("❌ Erro ao recuperar JSON:", e)
-        return jsonify({"erro": str(e)}), 500
+        response = jsonify({"erro": str(e)})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response, 500
 
