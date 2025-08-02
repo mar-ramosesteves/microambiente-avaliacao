@@ -1706,7 +1706,7 @@ def recuperar_json():
     try:
         empresa = request.args.get("empresa", "").strip().lower()
         rodada = request.args.get("codrodada", "").strip().lower()
-        email_lider = request.args.get("emailLider", "").strip().lower()
+        email_lider = request.args.get("emaillider", "").strip().lower()
         tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
 
         print("🔍 RECEBIDO NA ROTA /recuperar-json")
