@@ -1726,8 +1726,16 @@ def recuperar_json():
         print("🔗 URL Final Supabase:", url)
 
         resp = requests.get(url, headers=headers)
+
+        print("🔗 URL Final Supabase:", url)
         print("📦 Status Supabase:", resp.status_code)
-        print("📄 Resposta Supabase:", resp.text)
+        print("📄 Resposta Supabase (texto):", resp.text)
+        
+        try:
+            print("📄 JSON bruto recebido do Supabase:", resp.json())
+        except Exception as e:
+            print("❌ Erro ao converter JSON:", str(e))
+
 
         if resp.status_code != 200 or not resp.json():
             return jsonify({"erro": "Relatório não encontrado"}), 404
