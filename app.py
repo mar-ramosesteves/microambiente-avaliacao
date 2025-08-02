@@ -1694,66 +1694,51 @@ def salvar_consolidado_microambiente():
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/recuperar-json", methods=["GET", "OPTIONS"])
+@app.route("/recuperar-json", methods=["GET"])
 def recuperar_json():
-    if request.method == "OPTIONS":
-        response = jsonify({"status": "CORS preflight OK"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-        return response
+    import requests
 
-    try:
-        empresa = request.args.get("empresa", "").strip().lower()
-        rodada = request.args.get("codrodada", "").strip().lower()
-        email_lider = request.args.get("emaillider", "").strip().lower()
-        tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
+    empresa = request.args.get("empresa", "").strip().lower()
+    rodada = request.args.get("codrodada", "").strip().lower()
+    email_lider = request.args.get("emaillider", "").strip().lower()
+    tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
 
-        print("🔍 RECEBIDO NA ROTA /recuperar-json")
-        print("empresa:", empresa)
-        print("codrodada:", rodada)
-        print("email_lider:", email_lider)
-        print("tipo_relatorio:", tipo_relatorio)
+    print("🔍 RECEBIDO NA ROTA /recuperar-json")
+    print("empresa:", empresa)
+    print("codrodada:", rodada)
+    print("email_lider:", email_lider)
+    print("tipo_relatorio:", tipo_relatorio)
 
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}"
-        }
+    url = f"{SUPABASE_REST_URL}/relatorios_gerados"
 
-        url = f"{SUPABASE_REST_URL}/relatorios_gerados"
-        params = {
-            "empresa": f"eq.{empresa}",
-            "codrodada": f"eq.{rodada}",
-            "emaillider": f"eq.{email_lider}",
-            "tipo_relatorio": f"eq.{tipo_relatorio}",
-            "order": "data_criacao.desc",
-            "limit": 1
-        }
+    params = {
+        "empresa": f"eq.{empresa}",
+        "codrodada": f"eq.{rodada}",
+        "emaillider": f"eq.{email_lider}",
+        "tipo_relatorio": f"eq.{tipo_relatorio}",
+        "order": "data_criacao.desc",
+        "limit": 1
+    }
 
-        print("🔗 URL Final Supabase:", url)
-        resp = requests.get(url, headers=headers, params=params)
-           
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
 
-        print("🔗 URL Final Supabase:", url)
-        print("📦 Status Supabase:", resp.status_code)
-        print("📄 Resposta Supabase (texto):", resp.text)
-        
-        try:
-            print("📄 JSON bruto recebido do Supabase:", resp.json())
-        except Exception as e:
-            print("❌ Erro ao converter JSON:", str(e))
+    resp = requests.get(url, headers=headers, params=params)
 
+    print("🔗 URL Final Supabase:", resp.url)
+    print("📦 Status Supabase:", resp.status_code)
+    print("📄 Resposta Supabase (texto):", resp.text)
 
-        if resp.status_code != 200 or not resp.json():
-            return jsonify({"erro": "Relatório não encontrado"}), 404
+    if resp.status_code != 200:
+        return jsonify({"erro": "Erro ao buscar JSON"}), 500
 
-        dados_json = resp.json()[0].get("dados_json", {})
-        response = jsonify(dados_json)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response
+    resultados = resp.json()
+    if not resultados:
+        return jsonify({"erro": "Relatório não encontrado"}), 404
 
-    except Exception as e:
-        print("❌ ERRO ao buscar JSON:", str(e))
+    return jsonify(resultados[0]["dados_json"])
 
 
 
