@@ -1696,11 +1696,11 @@ def salvar_consolidado_microambiente():
 
 @app.route("/recuperar-json", methods=["GET"])
 def recuperar_json():
-    import requests
+    # As variáveis SUPABASE_REST_URL e SUPABASE_KEY são globais, devem estar acessíveis aqui.
 
     empresa = request.args.get("empresa", "").strip().lower()
     rodada = request.args.get("codrodada", "").strip().lower()
-    email_lider = request.args.get("emaillider", "").strip().lower()
+    email_lider = request.args.get("emaillider", "").strip().lower() # Frontend envia emailLider, mas Supabase é emaillider
     tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
 
     print("🔍 RECEBIDO NA ROTA /recuperar-json")
@@ -1725,21 +1725,30 @@ def recuperar_json():
         "Authorization": f"Bearer {SUPABASE_KEY}"
     }
 
-    resp = requests.get(url, headers=headers, params=params)
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        print("🔗 URL Final Supabase:", resp.url)
+        print("📦 Status Supabase:", resp.status_code)
+        print("📄 Resposta Supabase (texto):", resp.text)
 
-    print("🔗 URL Final Supabase:", resp.url)
-    print("📦 Status Supabase:", resp.status_code)
-    print("📄 Resposta Supabase (texto):", resp.text)
+        resp.raise_for_status() # Lança um erro para status HTTP ruins (4xx ou 5xx)
 
-    if resp.status_code != 200:
-        return jsonify({"erro": "Erro ao buscar JSON"}), 500
+        resultados = resp.json()
+        if not resultados:
+            return jsonify({"erro": f"JSON do tipo '{tipo_relatorio}' não encontrado para os dados fornecidos."}), 404
 
-    resultados = resp.json()
-    if not resultados:
-        return jsonify({"erro": "Relatório não encontrado"}), 404
+        return jsonify(resultados[0]["dados_json"]) # Retorna apenas o 'dados_json'
 
-    return jsonify(resultados[0]["dados_json"])
-
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro de comunicação com o Supabase na rota /recuperar-json: {e}")
+        detailed_traceback = traceback.format_exc()
+        print(f"TRACEBACK COMPLETO:\n{detailed_traceback}")
+        return jsonify({"erro": f"Erro de comunicação com o Supabase: {str(e)}", "debug_info": "Verifique os logs."}), 500
+    except Exception as e:
+        print(f"❌ Erro geral na rota /recuperar-json: {e}")
+        detailed_traceback = traceback.format_exc()
+        print(f"TRACEBACK COMPLETO:\n{detailed_traceback}")
+        return jsonify({"erro": str(e), "debug_info": "Verifique os logs para detalhes."}), 500
 
 
 @app.route("/debug-json", methods=["GET"])
