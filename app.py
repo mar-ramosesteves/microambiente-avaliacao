@@ -1115,11 +1115,7 @@ def salvar_grafico_media_equipe_subdimensao():
             q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
             q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
-            if i == 15:
-                print(f"DEBUG: Loop Q15 -> Mapeamento: {MAPEAMENTO_QUESTOES[q]}")
-                print(f"DEBUG: Chave gerada: {chave}")
-                print(f"DEBUG: Linha encontrada: {not linha.empty}")
-
+            
             val_real_auto = respostas_auto.get(q_real)
             val_ideal_auto = respostas_auto.get(q_ideal)
 
@@ -1134,6 +1130,17 @@ def salvar_grafico_media_equipe_subdimensao():
 
             chave = f"{q}_I{media_ideal}_R{media_real}"
             linha = matriz[matriz["CHAVE"] == chave]
+
+            if i == 15:
+                print(f"DEBUG: Loop Q15 -> Mapeamento: {MAPEAMENTO_QUESTOES[q]}")
+                print(f"DEBUG: Chave gerada: {chave}")
+                print(f"DEBUG: Linha encontrada: {not linha.empty}")
+        
+            if not linha.empty:
+                subdim = linha.iloc[0]["SUBDIMENSAO"]
+                pi = float(linha.iloc[0]["PONTUACAO_IDEAL"])
+                pr = float(linha.iloc[0]["PONTUACAO_REAL"])
+                calculo.append((subdim, pi, pr))
 
             if not linha.empty:
                 subdim = linha.iloc[0]["SUBDIMENSAO"]
