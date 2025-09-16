@@ -1128,7 +1128,7 @@ def salvar_grafico_media_equipe_subdimensao():
             media_real = round(mean(valores_real_equipe)) if valores_real_equipe else 0
             media_ideal = round(mean(valores_ideal_equipe)) if valores_ideal_equipe else 0
 
-            chave = f"{q}_I{media_ideal}_R{media_real}"
+            chave = f"{MAPEAMENTO_QUESTOES[q]}_I{media_ideal}_R{media_real}"
             linha = matriz[matriz["CHAVE"] == chave]
 
             if i == 15:
