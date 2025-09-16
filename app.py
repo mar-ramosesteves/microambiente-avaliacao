@@ -1116,9 +1116,9 @@ def salvar_grafico_media_equipe_subdimensao():
             q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
             if i == 15:
-            print(f"DEBUG: Loop Q15 -> Mapeamento: {MAPEAMENTO_QUESTOES[q]}")
-            print(f"DEBUG: Chave gerada: {chave}")
-            print(f"DEBUG: Linha encontrada: {not linha.empty}")
+                print(f"DEBUG: Loop Q15 -> Mapeamento: {MAPEAMENTO_QUESTOES[q]}")
+                print(f"DEBUG: Chave gerada: {chave}")
+                print(f"DEBUG: Linha encontrada: {not linha.empty}")
 
             val_real_auto = respostas_auto.get(q_real)
             val_ideal_auto = respostas_auto.get(q_ideal)
