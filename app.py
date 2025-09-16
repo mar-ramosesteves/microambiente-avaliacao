@@ -701,7 +701,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
         df["REAL"] = to_numeric(df["REAL"], errors="coerce").fillna(0)
 
         resultado = df.groupby("SUBDIMENSAO").sum().reset_index()
-        resultado = resultado.merge(pontos_sub, on="SUBDIMENSAO")
+        resultado = resultado.merge(TABELA_SUBDIMENSAO_MICROAMBIENTE_DF, on="SUBDIMENSAO")
         resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] = to_numeric(resultado["PONTOS_MAXIMOS_SUBDIMENSAO"], errors="coerce").fillna(0)
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
@@ -1141,7 +1141,7 @@ def salvar_grafico_media_equipe_subdimensao():
         df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
 
         resultado = df.groupby("SUBDIMENSAO").sum().reset_index()
-        resultado = resultado.merge(pontos_subdim, on="SUBDIMENSAO")
+        resultado = resultado.merge(TABELA_SUBDIMENSAO_MICROAMBIENTE_DF, on="SUBDIMENSAO")
         resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] = pd.to_numeric(resultado["PONTOS_MAXIMOS_SUBDIMENSAO"], errors="coerce").fillna(0)
 
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
