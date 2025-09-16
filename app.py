@@ -1107,38 +1107,29 @@ def salvar_grafico_media_equipe_subdimensao():
         
         pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
+        # --- Cálculo das Subdimensões ---
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
-            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
-
-            
-            val_real_auto = respostas_auto.get(q_real)
-            val_ideal_auto = respostas_auto.get(q_ideal)
-
-            valor_real_auto = int(val_real_auto) if val_real_auto and val_real_auto.strip().isdigit() else 0
-            valor_ideal_auto = int(val_ideal_auto) if val_ideal_auto and val_ideal_auto.strip().isdigit() else 0
-
-            valores_real_equipe = [int(av.get(q_real)) for av in avaliacoes if av.get(q_real, '').strip().isdigit()]
-            valores_ideal_equipe = [int(av.get(q_ideal)) for av in avaliacoes if av.get(q_ideal, '').strip().isdigit()]
-
-            media_real = round(mean(valores_real_equipe)) if valores_real_equipe else 0
-            media_ideal = round(mean(valores_ideal_equipe)) if valores_ideal_equipe else 0
-
-            chave = f"{MAPEAMENTO_QUESTOES[q]}_I{media_ideal}_R{media_real}"
-            linha = matriz[matriz["CHAVE"] == chave]
-
-            
+            reais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", "")).isdigit()]
+            ideais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", "")).isdigit()]
+            if not reais or not ideais:
+                continue
         
-            
-
+            media_real = round(sum(reais) / len(reais))
+            media_ideal = round(sum(ideais) / len(ideais))
+            chave = f"{q}_I{media_ideal}_R{media_real}"
+            linha = matriz[matriz["CHAVE"] == chave]
+        
             if not linha.empty:
-                subdim = linha.iloc[0]["SUBDIMENSAO"]
-                pi = float(linha.iloc[0]["PONTUACAO_IDEAL"])
-                pr = float(linha.iloc[0]["PONTUACAO_REAL"])
-                calculo.append((subdim, pi, pr))
+                row = linha.iloc[0]
+                calculo.append({
+                    "SUBDIMENSAO": row["SUBDIMENSAO"],
+                    "IDEAL": float(row["PONTUACAO_IDEAL"]),
+                    "REAL": float(row["PONTUACAO_REAL"])
+                })
 
+        
         df = pd.DataFrame(calculo, columns=["SUBDIMENSAO", "IDEAL", "REAL"])
         df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
         df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
