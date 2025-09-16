@@ -1103,6 +1103,9 @@ def salvar_grafico_media_equipe_subdimensao():
             'Q47': 'Q08',  # COD Q47 = Questão 8
             'Q48': 'Q09'   # COD Q48 = Questão 9
         }
+        print(f"DEBUG: Q15 mapeia para: {MAPEAMENTO_QUESTOES['Q15']}")
+        print(f"DEBUG: Q22 mapeia para: {MAPEAMENTO_QUESTOES['Q22']}")
+
         
         pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
@@ -1111,6 +1114,11 @@ def salvar_grafico_media_equipe_subdimensao():
             q = f"Q{i:02d}"
             q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
             q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
+
+            if i == 15:
+            print(f"DEBUG: Loop Q15 -> Mapeamento: {MAPEAMENTO_QUESTOES[q]}")
+            print(f"DEBUG: Chave gerada: {chave}")
+            print(f"DEBUG: Linha encontrada: {not linha.empty}")
 
             val_real_auto = respostas_auto.get(q_real)
             val_ideal_auto = respostas_auto.get(q_ideal)
