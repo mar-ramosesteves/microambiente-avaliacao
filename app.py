@@ -1024,7 +1024,7 @@ def salvar_grafico_media_equipe_subdimensao():
             data_criacao_cache_str = cached_report.get("data_criacao")
             if data_criacao_cache_str:
                 data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
-                if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < timedelta(hours=1):
+                if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < timedelta(minutes=1):
                     return jsonify(cached_report.get("dados_json", {})), 200
 
         url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente"
