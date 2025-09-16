@@ -435,14 +435,67 @@ def salvar_grafico_autoavaliacao():
         dados_consolidado = data_list[-1].get("dados_json", {})
         respostas_auto = dados_consolidado.get("autoavaliacao", {})
 
-        matriz = MATRIZ_MICROAMBIENTE_DF
-        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF
+        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
+        
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            q_real = f"{q}C"
-            q_ideal = f"{q}k"
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
             val_real_str = respostas_auto.get(q_real)
             val_ideal_str = respostas_auto.get(q_ideal)
@@ -566,14 +619,67 @@ def salvar_grafico_autoavaliacao_subdimensao():
         dados_consolidado = data_list[-1].get("dados_json", {})
         respostas_auto = dados_consolidado.get("autoavaliacao", {})
 
-        matriz = MATRIZ_MICROAMBIENTE_DF
-        pontos_sub = TABELA_SUBDIMENSAO_MICROAMBIENTE_DF
+        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
+        
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            q_real = f"{q}C"
-            q_ideal = f"{q}k"
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
             val_real_str = respostas_auto.get(q_real)
             val_ideal_str = respostas_auto.get(q_ideal)
@@ -729,13 +835,66 @@ def salvar_grafico_media_equipe_dimensao():
         
         # --- CARREGAR MATRIZES LOCAIS (já estão globais, usar as vars globais) ---
         matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
+        
         pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            q_real = f"{q}C"
-            q_ideal = f"{q}k"
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
             # Converte as respostas para INT de forma segura
             val_real_auto_str = respostas_auto.get(q_real)
@@ -894,14 +1053,67 @@ def salvar_grafico_media_equipe_subdimensao():
         respostas_auto = dados_do_consolidado.get("autoavaliacao", {})
         avaliacoes = dados_do_consolidado.get("avaliacoesEquipe", [])
 
-        matriz = MATRIZ_MICROAMBIENTE_DF
-        pontos_subdim = TABELA_SUBDIMENSAO_MICROAMBIENTE_DF  # <- TROCA PRINCIPAL AQUI
+        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
+        
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            q_real = f"{q}C"
-            q_ideal = f"{q}k"
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
             val_real_auto = respostas_auto.get(q_real)
             val_ideal_auto = respostas_auto.get(q_ideal)
@@ -1032,12 +1244,63 @@ def salvar_grafico_waterfall_gaps():
         # --- Carregar matriz local (global no app) ---
         matriz = MATRIZ_MICROAMBIENTE_DF
 
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
         # --- Cálculo dos GAPs ---
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            reais = [int(av.get(f"{q}C", 0)) for av in avaliacoes if str(av.get(f"{q}C", "")).isdigit()]
-            ideais = [int(av.get(f"{q}k", 0)) for av in avaliacoes if str(av.get(f"{q}k", "")).isdigit()]
+            reais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", "")).isdigit()]
+            ideais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", "")).isdigit()]
             if not reais or not ideais:
                 continue
 
@@ -1206,13 +1469,65 @@ def relatorio_gaps_por_questao():
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
 
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
+
         # Calcular médias por questão
         somas = {}
         for av in dados_equipes:
             for i in range(1, 49):
                 q = f"Q{i:02d}"
-                ideal = int(av.get(f"{q}k", 0))
-                real = int(av.get(f"{q}C", 0))
+                ideal = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0))
+                real = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0))
                 if q not in somas:
                     somas[q] = {"ideal": 0, "real": 0}
                 somas[q]["ideal"] += ideal
@@ -1340,14 +1655,66 @@ def relatorio_analitico_microambiente_supabase():
             return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
         matriz = MATRIZ_MICROAMBIENTE_DF  # DataFrame global carregado previamente
+
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
         num_avaliacoes = len(avaliacoes)
 
         somas = {}
         for av in avaliacoes:
             for i in range(1, 49):
                 q = f"Q{i:02d}"
-                ideal = int(av.get(f"{q}k", 0))
-                real = int(av.get(f"{q}C", 0))
+                ideal = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0))
+                real = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0))
                 if q not in somas:
                     somas[q] = {"ideal": 0, "real": 0}
                 somas[q]["ideal"] += ideal
@@ -1500,6 +1867,58 @@ def salvar_grafico_termometro_gaps():
 
         # --- Usar DataFrames globais para as matrizes ---
         matriz = MATRIZ_MICROAMBIENTE_DF # Usando global
+
+        # Mapeamento correto das questões
+        MAPEAMENTO_QUESTOES = {
+            'Q01': 'Q01',  # Questão 1
+            'Q02': 'Q02',  # Questão 10
+            'Q03': 'Q03',  # Questão 11
+            'Q04': 'Q04',  # Questão 12
+            'Q05': 'Q05',  # Questão 13
+            'Q06': 'Q06',  # Questão 14
+            'Q07': 'Q07',  # Questão 15
+            'Q08': 'Q08',  # Questão 16
+            'Q09': 'Q09',  # Questão 17
+            'Q10': 'Q10',  # Questão 18
+            'Q11': 'Q11',  # Questão 19
+            'Q12': 'Q12',  # Questão 2
+            'Q13': 'Q13',  # Questão 20
+            'Q14': 'Q14',  # Questão 21
+            'Q15': 'Q15',  # Questão 22
+            'Q16': 'Q16',  # Questão 23
+            'Q17': 'Q17',  # Questão 24
+            'Q18': 'Q18',  # Questão 25
+            'Q19': 'Q19',  # Questão 26
+            'Q20': 'Q20',  # Questão 27
+            'Q21': 'Q21',  # Questão 28
+            'Q22': 'Q22',  # Questão 29
+            'Q23': 'Q23',  # Questão 3
+            'Q24': 'Q24',  # Questão 30
+            'Q25': 'Q25',  # Questão 31
+            'Q26': 'Q26',  # Questão 32
+            'Q27': 'Q27',  # Questão 33
+            'Q28': 'Q28',  # Questão 34
+            'Q29': 'Q29',  # Questão 35
+            'Q30': 'Q30',  # Questão 36
+            'Q31': 'Q31',  # Questão 37
+            'Q32': 'Q32',  # Questão 38
+            'Q33': 'Q33',  # Questão 39
+            'Q34': 'Q34',  # Questão 4
+            'Q35': 'Q35',  # Questão 40
+            'Q36': 'Q36',  # Questão 41
+            'Q37': 'Q37',  # Questão 42
+            'Q38': 'Q38',  # Questão 43
+            'Q39': 'Q39',  # Questão 44
+            'Q40': 'Q40',  # Questão 45
+            'Q41': 'Q41',  # Questão 46
+            'Q42': 'Q42',  # Questão 47
+            'Q43': 'Q43',  # Questão 48
+            'Q44': 'Q44',  # Questão 5
+            'Q45': 'Q45',  # Questão 6
+            'Q46': 'Q46',  # Questão 7
+            'Q47': 'Q47',  # Questão 8
+            'Q48': 'Q48'   # Questão 9
+        }
         pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando global
         pontos_subdim = TABELA_SUBDIMENSAO_MICROAMBIENTE_DF # Usando global para subdimensoes
 
@@ -1509,8 +1928,8 @@ def salvar_grafico_termometro_gaps():
 
         for i in range(1, 49): # Iterar sobre as questões Q01 a Q48
             q = f"Q{i:02d}"
-            q_real = f"{q}C"
-            q_ideal = f"{q}k"
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
             # Converte as respostas para INT de forma segura (para equipe)
             reais = []
