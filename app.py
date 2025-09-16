@@ -1136,11 +1136,7 @@ def salvar_grafico_media_equipe_subdimensao():
                 print(f"DEBUG: Chave gerada: {chave}")
                 print(f"DEBUG: Linha encontrada: {not linha.empty}")
         
-            if not linha.empty:
-                subdim = linha.iloc[0]["SUBDIMENSAO"]
-                pi = float(linha.iloc[0]["PONTUACAO_IDEAL"])
-                pr = float(linha.iloc[0]["PONTUACAO_REAL"])
-                calculo.append((subdim, pi, pr))
+            
 
             if not linha.empty:
                 subdim = linha.iloc[0]["SUBDIMENSAO"]
