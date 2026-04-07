@@ -1724,7 +1724,7 @@ def relatorio_analitico_microambiente_supabase():
                 row = linha.iloc[0]
                 pontuacao_ideal = round((media_ideal / 6) * 100, 2)
                 pontuacao_real = round((media_real / 6) * 100, 2)
-                gap = round(pontuacao_real - pontuacao_ideal, 2)
+                gap = round(pontuacao_ideal - pontuacao_real, 2)
                 registros.append({
                     "QUESTAO": q,
                     "AFIRMACAO": row["AFIRMACAO"],
