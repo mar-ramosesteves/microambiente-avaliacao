@@ -1107,19 +1107,18 @@ def salvar_grafico_media_equipe_subdimensao():
             if not reais or not ideais:
                 continue
         
-            media_real = round(sum(reais) / len(reais))
-            media_ideal = round(sum(ideais) / len(ideais))
-            chave = f"{q}_I{media_ideal}_R{media_real}"
+            media_real = sum(reais) / len(reais)
+            media_ideal = sum(ideais) / len(ideais)
+            chave = f"{q}_I{round(media_ideal)}_R{round(media_real)}"
             linha = matriz[matriz["CHAVE"] == chave]
         
             if not linha.empty:
                 row = linha.iloc[0]
                 calculo.append({
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "IDEAL": float(row["PONTUACAO_IDEAL"]),
-                    "REAL": float(row["PONTUACAO_REAL"])
+                    "IDEAL": round((media_ideal / 6) * 100, 2),
+                    "REAL": round((media_real / 6) * 100, 2)
                 })
-
         
         df = pd.DataFrame(calculo, columns=["SUBDIMENSAO", "IDEAL", "REAL"])
         df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
