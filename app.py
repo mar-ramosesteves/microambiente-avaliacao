@@ -1715,23 +1715,27 @@ def relatorio_analitico_microambiente_supabase():
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
-            media_real = round(somas[q]["real"] / num_avaliacoes)
-            chave = f"{q}_I{media_ideal}_R{media_real}"
+            media_ideal = somas[q]["ideal"] / num_avaliacoes
+            media_real = somas[q]["real"] / num_avaliacoes
+            chave = f"{q}_I{round(media_ideal)}_R{round(media_real)}"
             linha = matriz[matriz["CHAVE"] == chave]
 
             if not linha.empty:
                 row = linha.iloc[0]
+                pontuacao_ideal = round((media_ideal / 6) * 100, 2)
+                pontuacao_real = round((media_real / 6) * 100, 2)
+                gap = round(pontuacao_real - pontuacao_ideal, 2)
                 registros.append({
                     "QUESTAO": q,
                     "AFIRMACAO": row["AFIRMACAO"],
                     "DIMENSAO": row["DIMENSAO"],
                     "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
-                    "PONTUACAO_REAL": float(row["PONTUACAO_REAL"]),
-                    "GAP": float(row["GAP"])
+                    "PONTUACAO_IDEAL": pontuacao_ideal,
+                    "PONTUACAO_REAL": pontuacao_real,
+                    "GAP": gap
                 })
 
+        
         dados_json = {
             "titulo": "RELATÓRIO ANALÍTICO DE MICROAMBIENTE",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}",
