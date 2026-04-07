@@ -913,29 +913,20 @@ def salvar_grafico_media_equipe_dimensao():
                 if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
                     valores_ideal_equipe.append(int(val_str))
 
-            media_real = round(mean(valores_real_equipe)) if valores_real_equipe else 0
-            media_ideal = round(mean(valores_ideal_equipe)) if valores_ideal_equipe else 0
+            media_real = mean(valores_real_equipe) if valores_real_equipe else 0
+            media_ideal = mean(valores_ideal_equipe) if valores_ideal_equipe else 0
             
-            chave = f"{q}_I{media_ideal}_R{media_real}"
-
-            # ... (código dentro do loop 'for i in range(1, 49):') ...
+            chave = f"{q}_I{round(media_ideal)}_R{round(media_real)}"
 
             linha = matriz[matriz["CHAVE"] == chave]
             if not linha.empty:
                 dim = linha.iloc[0]["DIMENSAO"]
-                pi_val = linha.iloc[0]["PONTUACAO_IDEAL"] # Pega o valor original
-                pr_val = linha.iloc[0]["PONTUACAO_REAL"] # Pega o valor original
+                pi = round((media_ideal / 6) * 100, 2)
+                pr = round((media_real / 6) * 100, 2)
     
-                # --- ADICIONE ESTAS DUAS LINHAS PARA FORÇAR FLOAT ---
-                # Garante que pi e pr são floats. errors='coerce' transforma não-números em NaN.
-                # .fillna(0) transforma NaN em 0.
-                # .item() extrai o valor escalar puro se ele vier como uma Series de um item.
-                pi = float(pi_val)
-                pr = float(pr_val)
-                # --- FIM DA ADIÇÃO ---
-    
-                calculo.append((dim, pi, pr)) # Usando pi e pr já convertidos para float
+                calculo.append((dim, pi, pr))
 
+        
         df = pd.DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
         # Converte as colunas IDEAL e REAL para tipo numérico, tratando erros
         df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
