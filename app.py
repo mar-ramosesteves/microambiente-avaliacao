@@ -3,46 +3,39 @@ import json
 import requests
 import pandas as pd
 from flask import Flask, request, jsonify
-from flask_cors import CORS # Não precisa de cross_origin aqui se usar CORS(app) globalmente
+from flask_cors import CORS
 from datetime import datetime, timedelta
 import traceback
-from statistics import mean # Mantenha esta se você a utiliza em cálculos
+from statistics import mean
 import base64
 
-# --- 1. DEFINIÇÃO DE VARIÁVEIS DE AMBIENTE GLOBAIS (DEVE ESTAR AQUI) ---
+# --- 1. DEFINIÇÃO DE VARIÁVEIS DE AMBIENTE GLOBAIS ---
 SUPABASE_REST_URL = os.environ.get("SUPABASE_REST_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-# --- 2. INICIALIZAÇÃO DO FLASK E CORS (DEVE VIR DEPOIS DAS VARS DE AMBIENTE) ---
+# --- 2. INICIALIZAÇÃO DO FLASK E CORS ---
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["https://gestor.thehrkey.tech"]}}, supports_credentials=True)
 
-# --- 3. FUNÇÕES AUXILIARES GLOBAIS (DEVEM VIR DEPOIS DO APP E ANTES DAS ROTAS) ---
+# --- 3. FUNÇÕES AUXILIARES GLOBAIS ---
 
-# --- FUNÇÃO ÚNICA E GENÉRICA PARA SALVAR JSON NO SUPABASE (relatorios_gerados) ---
 def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_val, tipo_do_json):
-    """
-    Salva um JSON (de relatório ou gráfico) no Supabase, na tabela relatorios_gerados.
-    Recebe o JSON a ser salvo e metadados para identificação.
-    """
     if not SUPABASE_REST_URL or not SUPABASE_KEY:
         print("❌ Não foi possível salvar no Supabase: Variáveis de ambiente não configuradas.")
         return False
 
-    url_tabela = f"{SUPABASE_REST_URL}/relatorios_gerados" # Salva na tabela genérica de relatórios/gráficos
-
+    url_tabela = f"{SUPABASE_REST_URL}/relatorios_gerados"
     headers = {
         "Content-Type": "application/json",
         "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}" # Use a chave de serviço para escrita se for o caso
+        "Authorization": f"Bearer {SUPABASE_KEY}"
     }
-
     payload = {
         "empresa": empresa,
         "codrodada": codrodada,
         "emaillider": emaillider_val,
-        "tipo_relatorio": tipo_do_json, # Usa o parâmetro para diferenciar o tipo de JSON
-        "dados_json": dados_para_salvar, # O JSON a ser salvo
+        "tipo_relatorio": tipo_do_json,
+        "dados_json": dados_para_salvar,
         "data_criacao": datetime.now().isoformat()
     }
 
@@ -53,20 +46,14 @@ def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_va
         return True
     except requests.exceptions.RequestException as e:
         print(f"❌ Erro ao salvar JSON do tipo '{tipo_do_json}' no Supabase: {e}")
-        if hasattr(response, 'status_code') and hasattr(response, 'text'):
-            print(f"Detalhes da resposta do Supabase: Status {response.status_code} - {response.text}")
-        else:
-            print("Não foi possível obter detalhes da resposta do Supabase.")
         return False
 
-# --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS (DEVE VIR DEPOIS DAS FUNÇÕES AUXILIARES) ---
-# Seus carregamentos de planilha de microambiente vêm aqui.
-# Certifique-se de que os nomes das variáveis globais estejam consistentes.
+# --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS ---
 try:
     TABELA_DIMENSAO_MICROAMBIENTE_DF = pd.read_excel("pontos_maximos_dimensao.xlsx")
     print("DEBUG: pontos_maximos_dimensao.xlsx carregada com sucesso.")
 except FileNotFoundError:
-    print("ERRO CRÍTICO: Arquivo 'pontos_maximos_dimensao.xlsx' não encontrado. A aplicação pode não funcionar corretamente.")
+    print("ERRO CRÍTICO: Arquivo 'pontos_maximos_dimensao.xlsx' não encontrado.")
     TABELA_DIMENSAO_MICROAMBIENTE_DF = pd.DataFrame()
 except Exception as e:
     print(f"ERRO CRÍTICO: Ao carregar 'pontos_maximos_dimensao.xlsx': {str(e)}.")
@@ -76,7 +63,7 @@ try:
     TABELA_SUBDIMENSAO_MICROAMBIENTE_DF = pd.read_excel("pontos_maximos_subdimensao.xlsx")
     print("DEBUG: pontos_maximos_subdimensao.xlsx carregada com sucesso.")
 except FileNotFoundError:
-    print("ERRO CRÍTICO: Arquivo 'pontos_maximos_subdimensao.xlsx' não encontrado. A aplicação pode não funcionar corretamente.")
+    print("ERRO CRÍTICO: Arquivo 'pontos_maximos_subdimensao.xlsx' não encontrado.")
     TABELA_SUBDIMENSAO_MICROAMBIENTE_DF = pd.DataFrame()
 except Exception as e:
     print(f"ERRO CRÍTICO: Ao carregar 'pontos_maximos_subdimensao.xlsx': {str(e)}.")
@@ -85,33 +72,22 @@ except Exception as e:
 try:
     MATRIZ_MICROAMBIENTE_DF = pd.read_excel(
         "TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx",
-        dtype={"PONTUACAO_IDEAL": float, "PONTUACAO_REAL": float} # Ajuste conforme suas colunas
+        dtype={"PONTUACAO_IDEAL": float, "PONTUACAO_REAL": float}
     )
     print("DEBUG: TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx carregada com sucesso.")
 except FileNotFoundError:
-    print("ERRO CRÍTICO: Arquivo 'TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx' não encontrado. A aplicação pode não funcionar corretamente.")
+    print("ERRO CRÍTICO: Arquivo 'TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx' não encontrado.")
     MATRIZ_MICROAMBIENTE_DF = pd.DataFrame()
 except Exception as e:
     print(f"ERRO CRÍTICO: Ao carregar 'TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx': {str(e)}.")
     MATRIZ_MICROAMBIENTE_DF = pd.DataFrame()
 
 
-# --- 5. DEFINIÇÕES DE ROTAS COMEÇAM A PARTIR DAQUI ---
-# Por exemplo, sua rota home:
+# --- 5. DEFINIÇÕES DE ROTAS ---
 @app.route("/")
 def home():
     return "API Microambiente Online"
 
-# ... (suas outras rotas virão aqui, incluindo a salvar-grafico-media-equipe-dimensao) ...
-
-# --- EXECUÇÃO DO FLASK APP ---
-# Este bloco deve estar no final do seu app.py, após todas as rotas.
-# if __name__ == "__main__":
-#     app.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
-
-# @app.route("/")
-# def home():
-#    return "API Microambiente Online"
 
 @app.route("/avaliar", methods=["POST"])
 def avaliar():
@@ -174,7 +150,6 @@ def avaliar():
     })
 
 @app.route("/enviar-avaliacao", methods=["POST", "OPTIONS"])
-
 def enviar_avaliacao():
     if request.method == "OPTIONS":
         return '', 200
@@ -189,7 +164,6 @@ def enviar_avaliacao():
     print("✅ Dados recebidos:", dados)
 
     try:
-        # Dados principais
         empresa = dados.get("empresa", "").strip().lower()
         codrodada = dados.get("codrodada", "").strip().lower()
         emailLider = dados.get("emailLider", "").strip().lower()
@@ -198,7 +172,6 @@ def enviar_avaliacao():
         if not all([empresa, codrodada, emailLider, tipo]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # Supabase: URL e headers
         url_supabase = "https://xmsjjknpnowsswwrbvpc.supabase.co/rest/v1/relatorios_microambiente"
 
         headers = {
@@ -208,8 +181,7 @@ def enviar_avaliacao():
             "Prefer": "return=representation"
         }
 
-        # Payload para Supabase
-        registro = { 
+        registro = {
             "empresa": empresa,
             "codrodada": codrodada,
             "emailLider": emailLider,
@@ -222,25 +194,20 @@ def enviar_avaliacao():
             "nascimento": dados.get("nascimento", "").strip(),
             "sexo": dados.get("sexo", "").strip().lower(),
             "etnia": dados.get("etnia", "").strip().lower(),
-            "data": dados.get("data", "").strip(),  # data do preenchimento
+            "data": dados.get("data", "").strip(),
             "cargo": dados.get("cargo", "").strip(),
             "area": dados.get("area", "").strip(),
             "cidade": dados.get("cidade", "").strip(),
             "pais": dados.get("pais", "").strip(),
             "data_criacao": datetime.datetime.now().isoformat(),
-            "dados_json": dados  # backup completo
+            "dados_json": dados
         }
 
-
-
-        # Envio para Supabase
         print("📦 Registro sendo enviado ao Supabase:")
         print(json.dumps(registro, indent=2, ensure_ascii=False))
 
         resposta = requests.post(url_supabase, headers=headers, json=registro)
-        
 
-        
         if resposta.status_code == 201:
             print("✅ Avaliação salva no Supabase com sucesso!")
             return jsonify({"status": "✅ Microambiente de Equipes → salvo no banco de dados"}), 200
@@ -257,7 +224,6 @@ def enviar_avaliacao():
         return jsonify({"erro": str(e)}), 500
 
 
-
 @app.route("/grafico-autoavaliacao", methods=["POST"])
 def grafico_autoavaliacao():
     from datetime import datetime
@@ -267,16 +233,13 @@ def grafico_autoavaliacao():
     import os
 
     try:
-        # JSON enviado via POST
         arquivo = request.files.get("arquivo_json")
         if not arquivo:
             return jsonify({"erro": "Arquivo JSON não enviado"}), 400
 
-        # Carregar planilhas auxiliares (já devem estar no diretório)
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
         pontos_maximos = pd.read_excel("pontos_maximos_dimensao.xlsx")
 
-        # Parse do JSON
         dados_json = json.load(arquivo)
         auto = dados_json.get("autoavaliacao")
         if not auto:
@@ -304,7 +267,6 @@ def grafico_autoavaliacao():
             pontos_por_dimensao[dim]["ideal"] += pontos_ideal
             pontos_por_dimensao[dim]["real"] += pontos_real
 
-        # Calcular % com base nos pontos máximos
         porcentagens = {}
         for _, row in pontos_maximos.iterrows():
             dim = row["DIMENSAO"]
@@ -315,7 +277,6 @@ def grafico_autoavaliacao():
                 "real": round((total["real"] / max_pontos) * 100, 1)
             }
 
-        # Criar gráfico
         labels = list(porcentagens.keys())
         valores_ideal = [porcentagens[d]["ideal"] for d in labels]
         valores_real = [porcentagens[d]["real"] for d in labels]
@@ -330,19 +291,7 @@ def grafico_autoavaliacao():
         ax.set_title("MICROAMBIENTE DE EQUIPES – DIMENSÕES", fontsize=16, weight="bold")
         ax.set_facecolor("#f2f2f2")
 
-        # Subtítulo
-        empresa = auto.get("empresa", "Empresa")
-        emailLider = auto.get("emailLider", "email")
-        codrodada = auto.get("codrodada", "")
-        
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        
-        plt.text(0.5, -0.18, subtitulo, ha="center", va="top", transform=ax.transAxes, fontsize=10)
-
         ax.legend()
-        ax.set_xticklabels(x, rotation=45, ha="right", fontsize=9)
-
-
         plt.tight_layout()
 
         nome_arquivo = "grafico_dimensoes_autoavaliacao.png"
@@ -354,13 +303,11 @@ def grafico_autoavaliacao():
         return jsonify({"erro": str(e)}), 500
 
 
-
 @app.route("/graficos-autoavaliacao", methods=["OPTIONS"])
 def preflight_graficos_autoavaliacao():
     return '', 200
 
 
-# ROTA PARA GERAR E SALVAR GRÁFICO DE AUTOAVALIAÇÃO DE MICROAMBIENTE
 @app.route("/salvar-grafico-autoavaliacao", methods=["POST", "OPTIONS"])
 def salvar_grafico_autoavaliacao():
     if request.method == "OPTIONS":
@@ -400,7 +347,6 @@ def salvar_grafico_autoavaliacao():
             "limit": 1
         }
 
-        print(f"DEBUG: Buscando cache do gráfico '{tipo_relatorio_grafico_atual}' no Supabase...")
         cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
@@ -425,7 +371,6 @@ def salvar_grafico_autoavaliacao():
             "emaillider": f"eq.{emaillider_req}"
         }
 
-        print(f"DEBUG: Buscando consolidado microambiente para {empresa}, rodada {codrodada}, líder {emaillider_req}")
         response = requests.get(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
         response.raise_for_status()
         data_list = response.json()
@@ -435,60 +380,22 @@ def salvar_grafico_autoavaliacao():
         dados_consolidado = data_list[-1].get("dados_json", {})
         respostas_auto = dados_consolidado.get("autoavaliacao", {})
 
-        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+        matriz = MATRIZ_MICROAMBIENTE_DF
 
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # Questão 1
-            'Q02': 'Q10',  # Questão 10
-            'Q03': 'Q11',  # Questão 11
-            'Q04': 'Q12',  # Questão 12
-            'Q05': 'Q13',  # Questão 13
-            'Q06': 'Q14',  # Questão 14
-            'Q07': 'Q15',  # Questão 15
-            'Q08': 'Q16',  # Questão 16
-            'Q09': 'Q17',  # Questão 17
-            'Q10': 'Q18',  # Questão 18
-            'Q11': 'Q19',  # Questão 19
-            'Q12': 'Q02',  # Questão 2
-            'Q13': 'Q20',  # Questão 20
-            'Q14': 'Q21',  # Questão 21
-            'Q15': 'Q22',  # Questão 22 (Performance)
-            'Q16': 'Q23',  # Questão 23
-            'Q17': 'Q24',  # Questão 24
-            'Q18': 'Q25',  # Questão 25
-            'Q19': 'Q26',  # Questão 26
-            'Q20': 'Q27',  # Questão 27
-            'Q21': 'Q28',  # Questão 28
-            'Q22': 'Q29',  # Questão 29
-            'Q23': 'Q03',  # Questão 3
-            'Q24': 'Q30',  # Questão 30
-            'Q25': 'Q31',  # Questão 31
-            'Q26': 'Q32',  # Questão 32
-            'Q27': 'Q33',  # Questão 33
-            'Q28': 'Q34',  # Questão 34
-            'Q29': 'Q35',  # Questão 35
-            'Q30': 'Q36',  # Questão 36
-            'Q31': 'Q37',  # Questão 37
-            'Q32': 'Q38',  # Questão 38
-            'Q33': 'Q39',  # Questão 39
-            'Q34': 'Q04',  # Questão 4
-            'Q35': 'Q40',  # Questão 40
-            'Q36': 'Q41',  # Questão 41
-            'Q37': 'Q42',  # Questão 42
-            'Q38': 'Q43',  # Questão 43
-            'Q39': 'Q44',  # Questão 44
-            'Q40': 'Q45',  # Questão 45
-            'Q41': 'Q46',  # Questão 46
-            'Q42': 'Q47',  # Questão 47
-            'Q43': 'Q48',  # Questão 48
-            'Q44': 'Q05',  # Questão 5
-            'Q45': 'Q06',  # Questão 6
-            'Q46': 'Q07',  # Questão 7
-            'Q47': 'Q08',  # Questão 8
-            'Q48': 'Q09'   # Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
-        
-        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
+
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF
 
         calculo = []
         for i in range(1, 49):
@@ -583,7 +490,6 @@ def salvar_grafico_autoavaliacao_subdimensao():
             "limit": 1
         }
 
-        print(f"DEBUG: Buscando cache do gráfico '{tipo_relatorio_grafico_atual}' no Supabase...")
         cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
@@ -597,7 +503,6 @@ def salvar_grafico_autoavaliacao_subdimensao():
                     print("✅ Cache válido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
 
-        # Buscar consolidado
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
         headers_consolidado = {
             "apikey": SUPABASE_KEY,
@@ -608,7 +513,6 @@ def salvar_grafico_autoavaliacao_subdimensao():
             "codrodada": f"eq.{codrodada}",
             "emaillider": f"eq.{emaillider_req}"
         }
-        print(f"DEBUG: Buscando consolidado microambiente para {empresa}, rodada {codrodada}, líder {emaillider_req}")
         response = requests.get(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
         response.raise_for_status()
         data_list = response.json()
@@ -618,61 +522,20 @@ def salvar_grafico_autoavaliacao_subdimensao():
         dados_consolidado = data_list[-1].get("dados_json", {})
         respostas_auto = dados_consolidado.get("autoavaliacao", {})
 
-        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+        matriz = MATRIZ_MICROAMBIENTE_DF
 
-        # Mapeamento correto das questões
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # Questão 1
-            'Q02': 'Q10',  # Questão 10
-            'Q03': 'Q11',  # Questão 11
-            'Q04': 'Q12',  # Questão 12
-            'Q05': 'Q13',  # Questão 13
-            'Q06': 'Q14',  # Questão 14
-            'Q07': 'Q15',  # Questão 15
-            'Q08': 'Q16',  # Questão 16
-            'Q09': 'Q17',  # Questão 17
-            'Q10': 'Q18',  # Questão 18
-            'Q11': 'Q19',  # Questão 19
-            'Q12': 'Q02',  # Questão 2
-            'Q13': 'Q20',  # Questão 20
-            'Q14': 'Q21',  # Questão 21
-            'Q15': 'Q22',  # Questão 22 (Performance)
-            'Q16': 'Q23',  # Questão 23
-            'Q17': 'Q24',  # Questão 24
-            'Q18': 'Q25',  # Questão 25
-            'Q19': 'Q26',  # Questão 26
-            'Q20': 'Q27',  # Questão 27
-            'Q21': 'Q28',  # Questão 28
-            'Q22': 'Q29',  # Questão 29
-            'Q23': 'Q03',  # Questão 3
-            'Q24': 'Q30',  # Questão 30
-            'Q25': 'Q31',  # Questão 31
-            'Q26': 'Q32',  # Questão 32
-            'Q27': 'Q33',  # Questão 33
-            'Q28': 'Q34',  # Questão 34
-            'Q29': 'Q35',  # Questão 35
-            'Q30': 'Q36',  # Questão 36
-            'Q31': 'Q37',  # Questão 37
-            'Q32': 'Q38',  # Questão 38
-            'Q33': 'Q39',  # Questão 39
-            'Q34': 'Q04',  # Questão 4
-            'Q35': 'Q40',  # Questão 40
-            'Q36': 'Q41',  # Questão 41
-            'Q37': 'Q42',  # Questão 42
-            'Q38': 'Q43',  # Questão 43
-            'Q39': 'Q44',  # Questão 44
-            'Q40': 'Q45',  # Questão 45
-            'Q41': 'Q46',  # Questão 46
-            'Q42': 'Q47',  # Questão 47
-            'Q43': 'Q48',  # Questão 48
-            'Q44': 'Q05',  # Questão 5
-            'Q45': 'Q06',  # Questão 6
-            'Q46': 'Q07',  # Questão 7
-            'Q47': 'Q08',  # Questão 8
-            'Q48': 'Q09'   # Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
-        
-        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
         calculo = []
         for i in range(1, 49):
@@ -741,37 +604,31 @@ def salvar_grafico_media_equipe_dimensao():
         from statistics import mean
         import requests
         from datetime import datetime
-        
-        # As variáveis SUPABASE_REST_URL e SUPABASE_KEY são globais, não precisam ser redefinidas aqui.
-        
+
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
-        emaillider_req = dados.get("emailLider") # Consistente com o frontend
+        emaillider_req = dados.get("emailLider")
 
         if not all([empresa, codrodada, emaillider_req]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # --- Lógica de Caching: Buscar JSON do Gráfico Salvo ---
-        tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_dimensao" 
+        tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_dimensao"
 
         url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
-
         headers_cache_busca = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
-
         params_cache = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
-            "emaillider": f"eq.{emaillider_req}", 
+            "emaillider": f"eq.{emaillider_req}",
             "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
             "order": "data_criacao.desc",
             "limit": 1
         }
 
-        print(f"DEBUG: Buscando cache do gráfico '{tipo_relatorio_grafico_atual}' no Supabase...")
         cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
@@ -779,194 +636,127 @@ def salvar_grafico_media_equipe_dimensao():
         if cached_data_list:
             cached_report = cached_data_list[0]
             data_criacao_cache_str = cached_report.get("data_criacao")
-            
             if data_criacao_cache_str:
-                data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00')) 
-                cache_validity_period = timedelta(hours=1) # Cache válido por 1 hora
-
+                data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
+                cache_validity_period = timedelta(hours=1)
                 if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < cache_validity_period:
-                    print(f"✅ Cache válido encontrado para o gráfico '{tipo_relatorio_grafico_atual}'. Retornando dados cacheados.")
+                    print(f"✅ Cache válido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
-                else:
-                    print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' expirado. Recalculando...")
-            else:
-                print("Cache encontrado, mas sem data de criação válida. Recalculando...")
-        else:
-            print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' não encontrado. Recalculando...")
 
-        # --- BUSCAR RELATÓRIO CONSOLIDADO DE MICROAMBIENTE DO SUPABASE ---
-        url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente" # Usando GLOBAL SUPABASE_REST_URL
-        
+        url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente"
         params_consolidado = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
             "emaillider": f"eq.{emaillider_req}"
         }
-
-        print(f"DEBUG: Buscando consolidado de microambiente no Supabase para Empresa: {empresa}, Rodada: {codrodada}, Líder: {emaillider_req}")
-        
         headers_consolidado_busca = {
-            "apikey": SUPABASE_KEY, # Usando GLOBAL SUPABASE_KEY
-            "Authorization": f"Bearer {SUPABASE_KEY}" # Usando GLOBAL SUPABASE_KEY
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
         }
 
         consolidado_response = requests.get(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
-        consolidado_response.raise_for_status() # Lança erro para status HTTP ruins
-
+        consolidado_response.raise_for_status()
         consolidated_data_list = consolidado_response.json()
 
         if not consolidated_data_list:
-            return jsonify({"erro": "Consolidado de microambiente não encontrado no Supabase para os dados fornecidos."}), 404
+            return jsonify({"erro": "Consolidado de microambiente não encontrado."}), 404
 
-        microambiente_consolidado = consolidated_data_list[-1] 
-
+        microambiente_consolidado = consolidated_data_list[-1]
         dados_do_consolidado = microambiente_consolidado.get("dados_json", {})
-        
-        # Extrair respostas para autoavaliação e equipe do JSON consolidado ANINHADO
-        respostas_auto = dados_do_consolidado.get("autoavaliacao", {})
-        avaliacoes = dados_do_consolidado.get("avaliacoesEquipe", []) # Variável 'avaliacoes' para o loop de cálculo
+        avaliacoes = dados_do_consolidado.get("avaliacoesEquipe", [])
 
-
-        print(f"DEBUG: Conteúdo de microambiente_consolidado (após fetch): {microambiente_consolidado}")
-        print(f"DEBUG: Conteúdo de respostas_auto: {respostas_auto}")
-        print(f"DEBUG: Conteúdo de avaliacoes (equipe): {avaliacoes}")
-        print(f"DEBUG: len(avaliacoes): {len(avaliacoes)}")
-        
-        # --- CARREGAR MATRIZES LOCAIS (já estão globais, usar as vars globais) ---
-        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+        matriz = MATRIZ_MICROAMBIENTE_DF
 
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # Questão 1
-            'Q02': 'Q10',  # Questão 10
-            'Q03': 'Q11',  # Questão 11
-            'Q04': 'Q12',  # Questão 12
-            'Q05': 'Q13',  # Questão 13
-            'Q06': 'Q14',  # Questão 14
-            'Q07': 'Q15',  # Questão 15
-            'Q08': 'Q16',  # Questão 16
-            'Q09': 'Q17',  # Questão 17
-            'Q10': 'Q18',  # Questão 18
-            'Q11': 'Q19',  # Questão 19
-            'Q12': 'Q02',  # Questão 2
-            'Q13': 'Q20',  # Questão 20
-            'Q14': 'Q21',  # Questão 21
-            'Q15': 'Q22',  # Questão 22 (Performance)
-            'Q16': 'Q23',  # Questão 23
-            'Q17': 'Q24',  # Questão 24
-            'Q18': 'Q25',  # Questão 25
-            'Q19': 'Q26',  # Questão 26
-            'Q20': 'Q27',  # Questão 27
-            'Q21': 'Q28',  # Questão 28
-            'Q22': 'Q29',  # Questão 29
-            'Q23': 'Q03',  # Questão 3
-            'Q24': 'Q30',  # Questão 30
-            'Q25': 'Q31',  # Questão 31
-            'Q26': 'Q32',  # Questão 32
-            'Q27': 'Q33',  # Questão 33
-            'Q28': 'Q34',  # Questão 34
-            'Q29': 'Q35',  # Questão 35
-            'Q30': 'Q36',  # Questão 36
-            'Q31': 'Q37',  # Questão 37
-            'Q32': 'Q38',  # Questão 38
-            'Q33': 'Q39',  # Questão 39
-            'Q34': 'Q04',  # Questão 4
-            'Q35': 'Q40',  # Questão 40
-            'Q36': 'Q41',  # Questão 41
-            'Q37': 'Q42',  # Questão 42
-            'Q38': 'Q43',  # Questão 43
-            'Q39': 'Q44',  # Questão 44
-            'Q40': 'Q45',  # Questão 45
-            'Q41': 'Q46',  # Questão 46
-            'Q42': 'Q47',  # Questão 47
-            'Q43': 'Q48',  # Questão 48
-            'Q44': 'Q05',  # Questão 5
-            'Q45': 'Q06',  # Questão 6
-            'Q46': 'Q07',  # Questão 7
-            'Q47': 'Q08',  # Questão 8
-            'Q48': 'Q09'   # Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
-        
-        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
+        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF
+
+        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
+        # depois faz média dos percentuais obtidos
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
             q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
             q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
-            # Converte as respostas para INT de forma segura
-            val_real_auto_str = respostas_auto.get(q_real)
-            valor_real_auto = int(val_real_auto_str) if val_real_auto_str and isinstance(val_real_auto_str, str) and val_real_auto_str.strip().isdigit() else 0
+            soma_ideal = 0
+            soma_real = 0
+            count = 0
 
-            val_ideal_auto_str = respostas_auto.get(q_ideal)
-            valor_ideal_auto = int(val_ideal_auto_str) if val_ideal_auto_str and isinstance(val_ideal_auto_str, str) and val_ideal_auto_str.strip().isdigit() else 0
-            
-            valores_real_equipe = []
             for av in avaliacoes:
-                val_str = av.get(q_real)
-                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
-                    valores_real_equipe.append(int(val_str))
-            
-            valores_ideal_equipe = []
-            for av in avaliacoes:
-                val_str = av.get(q_ideal)
-                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
-                    valores_ideal_equipe.append(int(val_str))
+                val_real_str = av.get(q_real)
+                val_ideal_str = av.get(q_ideal)
 
-            media_real = mean(valores_real_equipe) if valores_real_equipe else 0
-            media_ideal = mean(valores_ideal_equipe) if valores_ideal_equipe else 0
-            
-            chave = f"{q}_I{round(media_ideal)}_R{round(media_real)}"
+                if val_real_str is None or val_ideal_str is None:
+                    continue
+                if not str(val_real_str).strip().isdigit() or not str(val_ideal_str).strip().isdigit():
+                    continue
 
-            linha = matriz[matriz["CHAVE"] == chave]
-            if not linha.empty:
-                dim = linha.iloc[0]["DIMENSAO"]
-                pi = round((media_ideal / 6) * 100, 2)
-                pr = round((media_real / 6) * 100, 2)
-    
-                calculo.append((dim, pi, pr))
+                valor_real = int(val_real_str)
+                valor_ideal = int(val_ideal_str)
 
-        
+                chave = f"{q}_I{valor_ideal}_R{valor_real}"
+                linha = matriz[matriz["CHAVE"] == chave]
+
+                if not linha.empty:
+                    soma_ideal += float(linha.iloc[0]["PONTUACAO_IDEAL"])
+                    soma_real += float(linha.iloc[0]["PONTUACAO_REAL"])
+                    count += 1
+
+            if count > 0:
+                dim = matriz[matriz["CHAVE"] == f"{q}_I1_R1"]["DIMENSAO"].iloc[0] if not matriz[matriz["CHAVE"] == f"{q}_I1_R1"].empty else None
+                # Busca a dimensão pela questão
+                linhas_q = matriz[matriz["COD"] == q]
+                if not linhas_q.empty:
+                    dim = linhas_q.iloc[0]["DIMENSAO"]
+                    media_ideal = soma_ideal / count
+                    media_real = soma_real / count
+                    calculo.append((dim, media_ideal, media_real))
+
         df = pd.DataFrame(calculo, columns=["DIMENSAO", "IDEAL", "REAL"])
-        # Converte as colunas IDEAL e REAL para tipo numérico, tratando erros
         df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
         df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
-        
+
         resultado = df.groupby("DIMENSAO").sum().reset_index()
         resultado = resultado.merge(pontos_dim, on="DIMENSAO")
         resultado["PONTOS_MAXIMOS_DIMENSAO"] = pd.to_numeric(resultado["PONTOS_MAXIMOS_DIMENSAO"], errors="coerce").fillna(0)
-
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_DIMENSAO"] * 100).round(1)
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
-        numero_avaliacoes = len(avaliacoes) # Número de avaliações da equipe
+        numero_avaliacoes = len(avaliacoes)
 
         dados_json = {
             "titulo": "MÉDIA DA EQUIPE - DIMENSÕES",
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
-            "info_avaliacoes": f"Equipe: {numero_avaliacoes} respondentes", # Adicionado para o frontend
+            "info_avaliacoes": f"Equipe: {numero_avaliacoes} respondentes",
             "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
         }
-        
-        # --- Chamar a função para salvar os dados do gráfico gerados no Supabase ---
-        tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_dimensao" 
-        salvar_json_no_supabase(dados_json, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual) # Usando a função renomeada
 
-        # Retornando o JSON completo para o navegador
+        salvar_json_no_supabase(dados_json, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
         return jsonify(dados_json), 200
 
     except Exception as e:
         detailed_traceback = traceback.format_exc()
-        print("\n" + "="*50) # Linha de destaque no log
+        print("\n" + "="*50)
         print("🚨🚨🚨 ERRO CRÍTICO NA ROTA salvar-grafico-media-equipe-dimensao 🚨🚨🚨")
         print(f"Tipo do erro: {type(e).__name__}")
         print(f"Mensagem do erro: {str(e)}")
-        print("TRACEBACK COMPLETO ABAIXO:")
-        traceback.print_exc() # Isso imprime diretamente no sys.stderr, que geralmente vai para o log
-        print("="*50 + "\n") # Linha de destaque no log
-        
+        traceback.print_exc()
+        print("="*50 + "\n")
         return jsonify({"erro": str(e), "debug_info": "Verifique os logs do Render.com para detalhes."}), 500
+
 
 @app.route("/salvar-grafico-media-equipe-subdimensao", methods=["POST", "OPTIONS"])
 def salvar_grafico_media_equipe_subdimensao():
@@ -981,7 +771,7 @@ def salvar_grafico_media_equipe_subdimensao():
         from statistics import mean
         import requests
         from datetime import datetime, timedelta
-        
+
         dados = request.get_json()
         empresa = dados.get("empresa")
         codrodada = dados.get("codrodada")
@@ -1024,7 +814,6 @@ def salvar_grafico_media_equipe_subdimensao():
             "codrodada": f"eq.{codrodada}",
             "emaillider": f"eq.{emaillider_req}"
         }
-
         headers_consolidado_busca = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
@@ -1039,95 +828,73 @@ def salvar_grafico_media_equipe_subdimensao():
 
         microambiente_consolidado = consolidated_data_list[-1]
         dados_do_consolidado = microambiente_consolidado.get("dados_json", {})
-        respostas_auto = dados_do_consolidado.get("autoavaliacao", {})
         avaliacoes = dados_do_consolidado.get("avaliacoesEquipe", [])
 
-        matriz = MATRIZ_MICROAMBIENTE_DF # Usando a variável global
+        matriz = MATRIZ_MICROAMBIENTE_DF
 
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # COD Q01 = Questão 1
-            'Q02': 'Q10',  # COD Q02 = Questão 10  
-            'Q03': 'Q11',  # COD Q03 = Questão 11
-            'Q04': 'Q12',  # COD Q04 = Questão 12
-            'Q05': 'Q13',  # COD Q05 = Questão 13
-            'Q06': 'Q14',  # COD Q06 = Questão 14
-            'Q07': 'Q15',  # COD Q07 = Questão 15
-            'Q08': 'Q16',  # COD Q08 = Questão 16
-            'Q09': 'Q17',  # COD Q09 = Questão 17
-            'Q10': 'Q18',  # COD Q10 = Questão 18
-            'Q11': 'Q19',  # COD Q11 = Questão 19
-            'Q12': 'Q02',  # COD Q12 = Questão 2
-            'Q13': 'Q20',  # COD Q13 = Questão 20
-            'Q14': 'Q21',  # COD Q14 = Questão 21
-            'Q15': 'Q22',  # COD Q15 = Questão 22 (Performance) ✅
-            'Q16': 'Q23',  # COD Q16 = Questão 23
-            'Q17': 'Q24',  # COD Q17 = Questão 24
-            'Q18': 'Q25',  # COD Q18 = Questão 25
-            'Q19': 'Q26',  # COD Q19 = Questão 26
-            'Q20': 'Q27',  # COD Q20 = Questão 27
-            'Q21': 'Q28',  # COD Q21 = Questão 28
-            'Q22': 'Q29',  # COD Q22 = Questão 29
-            'Q23': 'Q03',  # COD Q23 = Questão 3
-            'Q24': 'Q30',  # COD Q24 = Questão 30
-            'Q25': 'Q31',  # COD Q25 = Questão 31
-            'Q26': 'Q32',  # COD Q26 = Questão 32
-            'Q27': 'Q33',  # COD Q27 = Questão 33
-            'Q28': 'Q34',  # COD Q28 = Questão 34
-            'Q29': 'Q35',  # COD Q29 = Questão 35
-            'Q30': 'Q36',  # COD Q30 = Questão 36
-            'Q31': 'Q37',  # COD Q31 = Questão 37
-            'Q32': 'Q38',  # COD Q32 = Questão 38
-            'Q33': 'Q39',  # COD Q33 = Questão 39
-            'Q34': 'Q04',  # COD Q34 = Questão 4
-            'Q35': 'Q40',  # COD Q35 = Questão 40
-            'Q36': 'Q41',  # COD Q36 = Questão 41
-            'Q37': 'Q42',  # COD Q37 = Questão 42
-            'Q38': 'Q43',  # COD Q38 = Questão 43
-            'Q39': 'Q44',  # COD Q39 = Questão 44
-            'Q40': 'Q45',  # COD Q40 = Questão 45
-            'Q41': 'Q46',  # COD Q41 = Questão 46
-            'Q42': 'Q47',  # COD Q42 = Questão 47
-            'Q43': 'Q48',  # COD Q43 = Questão 48
-            'Q44': 'Q05',  # COD Q44 = Questão 5
-            'Q45': 'Q06',  # COD Q45 = Questão 6
-            'Q46': 'Q07',  # COD Q46 = Questão 7
-            'Q47': 'Q08',  # COD Q47 = Questão 8
-            'Q48': 'Q09'   # COD Q48 = Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
-        
-        
-        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando a variável global
 
-        # --- Cálculo das Subdimensões ---
+        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            reais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", "")).isdigit()]
-            ideais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", "")).isdigit()]
-            if not reais or not ideais:
-                continue
-        
-            media_real = sum(reais) / len(reais)
-            media_ideal = sum(ideais) / len(ideais)
-            chave = f"{q}_I{round(media_ideal)}_R{round(media_real)}"
-            linha = matriz[matriz["CHAVE"] == chave]
-        
-            if not linha.empty:
-                row = linha.iloc[0]
-                calculo.append({
-                    "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "IDEAL": round((media_ideal / 6) * 100, 2),
-                    "REAL": round((media_real / 6) * 100, 2)
-                })
-        
-        df = pd.DataFrame(calculo, columns=["SUBDIMENSAO", "IDEAL", "REAL"])
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
+
+            soma_ideal = 0
+            soma_real = 0
+            count = 0
+
+            for av in avaliacoes:
+                val_real_str = av.get(q_real)
+                val_ideal_str = av.get(q_ideal)
+
+                if val_real_str is None or val_ideal_str is None:
+                    continue
+                if not str(val_real_str).strip().isdigit() or not str(val_ideal_str).strip().isdigit():
+                    continue
+
+                valor_real = int(val_real_str)
+                valor_ideal = int(val_ideal_str)
+
+                chave = f"{q}_I{valor_ideal}_R{valor_real}"
+                linha = matriz[matriz["CHAVE"] == chave]
+
+                if not linha.empty:
+                    soma_ideal += float(linha.iloc[0]["PONTUACAO_IDEAL"])
+                    soma_real += float(linha.iloc[0]["PONTUACAO_REAL"])
+                    count += 1
+
+            if count > 0:
+                linhas_q = matriz[matriz["COD"] == q]
+                if not linhas_q.empty:
+                    subdim = linhas_q.iloc[0]["SUBDIMENSAO"]
+                    media_ideal = soma_ideal / count
+                    media_real = soma_real / count
+                    calculo.append({
+                        "SUBDIMENSAO": subdim,
+                        "IDEAL": media_ideal,
+                        "REAL": media_real
+                    })
+
+        df = pd.DataFrame(calculo)
         df['IDEAL'] = pd.to_numeric(df['IDEAL'], errors='coerce').fillna(0)
         df['REAL'] = pd.to_numeric(df['REAL'], errors='coerce').fillna(0)
 
         resultado = df.groupby("SUBDIMENSAO").sum().reset_index()
         resultado = resultado.merge(TABELA_SUBDIMENSAO_MICROAMBIENTE_DF, on="SUBDIMENSAO")
         resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] = pd.to_numeric(resultado["PONTOS_MAXIMOS_SUBDIMENSAO"], errors="coerce").fillna(0)
-
         resultado["IDEAL_%"] = (resultado["IDEAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
         resultado["REAL_%"] = (resultado["REAL"] / resultado["PONTOS_MAXIMOS_SUBDIMENSAO"] * 100).round(1)
 
@@ -1174,7 +941,6 @@ def salvar_grafico_waterfall_gaps():
 
         tipo_relatorio = "microambiente_waterfall_gaps"
 
-        # --- Buscar cache no Supabase ---
         url_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
         headers = {
             "apikey": SUPABASE_KEY,
@@ -1189,7 +955,6 @@ def salvar_grafico_waterfall_gaps():
             "limit": 1
         }
 
-        print(f"DEBUG: Buscando cache waterfall gaps...")
         resp = requests.get(url_cache, headers=headers, params=params, timeout=15)
         resp.raise_for_status()
         dados_cache = resp.json()
@@ -1202,7 +967,6 @@ def salvar_grafico_waterfall_gaps():
                     print("✅ Cache válido encontrado. Retornando.")
                     return jsonify(dados_cache[0].get("dados_json", {})), 200
 
-        # --- Buscar consolidado no Supabase ---
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
         params_consolidado = {
             "empresa": f"eq.{empresa}",
@@ -1210,7 +974,6 @@ def salvar_grafico_waterfall_gaps():
             "emaillider": f"eq.{emailLider}"
         }
 
-        print(f"DEBUG: Buscando consolidado para {empresa}/{codrodada}/{emailLider}")
         resp = requests.get(url_consolidado, headers=headers, params=params_consolidado, timeout=30)
         resp.raise_for_status()
         dados = resp.json()
@@ -1223,82 +986,59 @@ def salvar_grafico_waterfall_gaps():
         if not avaliacoes:
             return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
-        print(f"DEBUG: Total de avaliações equipe: {len(avaliacoes)}")
-
-        # --- Carregar matriz local (global no app) ---
         matriz = MATRIZ_MICROAMBIENTE_DF
 
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # Questão 1
-            'Q02': 'Q10',  # Questão 10
-            'Q03': 'Q11',  # Questão 11
-            'Q04': 'Q12',  # Questão 12
-            'Q05': 'Q13',  # Questão 13
-            'Q06': 'Q14',  # Questão 14
-            'Q07': 'Q15',  # Questão 15
-            'Q08': 'Q16',  # Questão 16
-            'Q09': 'Q17',  # Questão 17
-            'Q10': 'Q18',  # Questão 18
-            'Q11': 'Q19',  # Questão 19
-            'Q12': 'Q02',  # Questão 2
-            'Q13': 'Q20',  # Questão 20
-            'Q14': 'Q21',  # Questão 21
-            'Q15': 'Q22',  # Questão 22 (Performance)
-            'Q16': 'Q23',  # Questão 23
-            'Q17': 'Q24',  # Questão 24
-            'Q18': 'Q25',  # Questão 25
-            'Q19': 'Q26',  # Questão 26
-            'Q20': 'Q27',  # Questão 27
-            'Q21': 'Q28',  # Questão 28
-            'Q22': 'Q29',  # Questão 29
-            'Q23': 'Q03',  # Questão 3
-            'Q24': 'Q30',  # Questão 30
-            'Q25': 'Q31',  # Questão 31
-            'Q26': 'Q32',  # Questão 32
-            'Q27': 'Q33',  # Questão 33
-            'Q28': 'Q34',  # Questão 34
-            'Q29': 'Q35',  # Questão 35
-            'Q30': 'Q36',  # Questão 36
-            'Q31': 'Q37',  # Questão 37
-            'Q32': 'Q38',  # Questão 38
-            'Q33': 'Q39',  # Questão 39
-            'Q34': 'Q04',  # Questão 4
-            'Q35': 'Q40',  # Questão 40
-            'Q36': 'Q41',  # Questão 41
-            'Q37': 'Q42',  # Questão 42
-            'Q38': 'Q43',  # Questão 43
-            'Q39': 'Q44',  # Questão 44
-            'Q40': 'Q45',  # Questão 45
-            'Q41': 'Q46',  # Questão 46
-            'Q42': 'Q47',  # Questão 47
-            'Q43': 'Q48',  # Questão 48
-            'Q44': 'Q05',  # Questão 5
-            'Q45': 'Q06',  # Questão 6
-            'Q46': 'Q07',  # Questão 7
-            'Q47': 'Q08',  # Questão 8
-            'Q48': 'Q09'   # Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
-        # --- Cálculo dos GAPs ---
+
+        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente, faz média dos GAPs
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            reais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", "")).isdigit()]
-            ideais = [int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0)) for av in avaliacoes if str(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", "")).isdigit()]
-            if not reais or not ideais:
-                continue
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
-            media_real = round(sum(reais) / len(reais))
-            media_ideal = round(sum(ideais) / len(ideais))
-            chave = f"{q}_I{media_ideal}_R{media_real}"
-            linha = matriz[matriz["CHAVE"] == chave]
+            gaps_individuais = []
+            dim_q = None
+            subdim_q = None
 
-            if not linha.empty:
-                row = linha.iloc[0]
+            for av in avaliacoes:
+                val_real_str = av.get(q_real)
+                val_ideal_str = av.get(q_ideal)
+
+                if val_real_str is None or val_ideal_str is None:
+                    continue
+                if not str(val_real_str).strip().isdigit() or not str(val_ideal_str).strip().isdigit():
+                    continue
+
+                valor_real = int(val_real_str)
+                valor_ideal = int(val_ideal_str)
+
+                chave = f"{q}_I{valor_ideal}_R{valor_real}"
+                linha = matriz[matriz["CHAVE"] == chave]
+
+                if not linha.empty:
+                    gaps_individuais.append(float(linha.iloc[0]["GAP"]))
+                    if dim_q is None:
+                        dim_q = linha.iloc[0]["DIMENSAO"]
+                        subdim_q = linha.iloc[0]["SUBDIMENSAO"]
+
+            if gaps_individuais and dim_q:
                 registros.append({
                     "QUESTAO": q,
-                    "DIMENSAO": row["DIMENSAO"],
-                    "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "GAP": row["GAP"]
+                    "DIMENSAO": dim_q,
+                    "SUBDIMENSAO": subdim_q,
+                    "GAP": sum(gaps_individuais) / len(gaps_individuais)
                 })
 
         df = pd.DataFrame(registros)
@@ -1308,14 +1048,12 @@ def salvar_grafico_waterfall_gaps():
         import matplotlib.pyplot as plt
         import seaborn as sns
         import matplotlib.ticker as mticker
-        
-        fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 7))  # Altura reduzida
-        
-        # Função de cor condicional
+
+        fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 7))
+
         def get_gap_colors(gaps):
-            return ['#FFA07A' if abs(g) > 20 else '#ADD8E6' for g in gaps]  # Laranja claro / Azul claro
-        
-        # --- GRÁFICO 1: Dimensões ---
+            return ['#FFA07A' if abs(g) > 20 else '#ADD8E6' for g in gaps]
+
         sns.barplot(x="DIMENSAO", y="GAP", data=gap_dim, palette=get_gap_colors(gap_dim["GAP"]), ax=ax1)
         ax1.set_title("GAP por Dimensão", fontsize=13)
         ax1.set_ylabel("GAP (%)")
@@ -1325,8 +1063,7 @@ def salvar_grafico_waterfall_gaps():
         for bar in ax1.patches:
             h = bar.get_height()
             ax1.annotate(f'{h:.1f}%', (bar.get_x() + bar.get_width() / 2, h - 3), ha='center', fontsize=8)
-        
-        # --- GRÁFICO 2: Subdimensões ---
+
         sns.barplot(x="SUBDIMENSAO", y="GAP", data=gap_sub, palette=get_gap_colors(gap_sub["GAP"]), ax=ax2)
         ax2.set_title("GAP por Subdimensão", fontsize=13)
         ax2.set_ylabel("GAP (%)")
@@ -1336,20 +1073,14 @@ def salvar_grafico_waterfall_gaps():
         for bar in ax2.patches:
             h = bar.get_height()
             ax2.annotate(f'{h:.1f}%', (bar.get_x() + bar.get_width() / 2, h - 3), ha='center', fontsize=7)
-        
-        # --- Legenda personalizada ---
+
         fig.legend(["GAP > 20% = Laranja claro", "GAP ≤ 20% = Azul claro"],
                    loc='upper center', ncol=2, fontsize=9, bbox_to_anchor=(0.5, 1.02))
-        
-        # --- Ajustes e salvamento ---
+
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         nome_arquivo_png = f"waterfall_gaps_{emailLider}_{codrodada}.png"
         caminho_png = f"/tmp/{nome_arquivo_png}"
         plt.savefig(caminho_png, dpi=300, bbox_inches='tight')
-
-
-        print("DEBUG: GAP por dimensão:", gap_dim.to_dict(orient="records"))
-        print("DEBUG: GAP por subdimensão:", gap_sub.to_dict(orient="records"))
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         dados_json = {
@@ -1376,11 +1107,7 @@ def salvar_grafico_waterfall_gaps():
         print(f"Mensagem: {str(e)}")
         traceback.print_exc()
         print("="*60 + "\n")
-        return jsonify({
-            "erro": str(e),
-            "debug_info": "Verifique os logs para detalhes."
-        }), 500
-
+        return jsonify({"erro": str(e), "debug_info": "Verifique os logs para detalhes."}), 500
 
 
 @app.route("/relatorio-gaps-por-questao", methods=["POST"])
@@ -1406,7 +1133,6 @@ def relatorio_gaps_por_questao():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # GOOGLE DRIVE
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
             json.loads(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")),
@@ -1453,92 +1179,69 @@ def relatorio_gaps_por_questao():
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
 
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # Questão 1
-            'Q02': 'Q10',  # Questão 10
-            'Q03': 'Q11',  # Questão 11
-            'Q04': 'Q12',  # Questão 12
-            'Q05': 'Q13',  # Questão 13
-            'Q06': 'Q14',  # Questão 14
-            'Q07': 'Q15',  # Questão 15
-            'Q08': 'Q16',  # Questão 16
-            'Q09': 'Q17',  # Questão 17
-            'Q10': 'Q18',  # Questão 18
-            'Q11': 'Q19',  # Questão 19
-            'Q12': 'Q02',  # Questão 2
-            'Q13': 'Q20',  # Questão 20
-            'Q14': 'Q21',  # Questão 21
-            'Q15': 'Q22',  # Questão 22 (Performance)
-            'Q16': 'Q23',  # Questão 23
-            'Q17': 'Q24',  # Questão 24
-            'Q18': 'Q25',  # Questão 25
-            'Q19': 'Q26',  # Questão 26
-            'Q20': 'Q27',  # Questão 27
-            'Q21': 'Q28',  # Questão 28
-            'Q22': 'Q29',  # Questão 29
-            'Q23': 'Q03',  # Questão 3
-            'Q24': 'Q30',  # Questão 30
-            'Q25': 'Q31',  # Questão 31
-            'Q26': 'Q32',  # Questão 32
-            'Q27': 'Q33',  # Questão 33
-            'Q28': 'Q34',  # Questão 34
-            'Q29': 'Q35',  # Questão 35
-            'Q30': 'Q36',  # Questão 36
-            'Q31': 'Q37',  # Questão 37
-            'Q32': 'Q38',  # Questão 38
-            'Q33': 'Q39',  # Questão 39
-            'Q34': 'Q04',  # Questão 4
-            'Q35': 'Q40',  # Questão 40
-            'Q36': 'Q41',  # Questão 41
-            'Q37': 'Q42',  # Questão 42
-            'Q38': 'Q43',  # Questão 43
-            'Q39': 'Q44',  # Questão 44
-            'Q40': 'Q45',  # Questão 45
-            'Q41': 'Q46',  # Questão 46
-            'Q42': 'Q47',  # Questão 47
-            'Q43': 'Q48',  # Questão 48
-            'Q44': 'Q05',  # Questão 5
-            'Q45': 'Q06',  # Questão 6
-            'Q46': 'Q07',  # Questão 7
-            'Q47': 'Q08',  # Questão 8
-            'Q48': 'Q09'   # Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
 
-        # Calcular médias por questão
-        somas = {}
-        for av in dados_equipes:
-            for i in range(1, 49):
-                q = f"Q{i:02d}"
-                ideal = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0))
-                real = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0))
-                if q not in somas:
-                    somas[q] = {"ideal": 0, "real": 0}
-                somas[q]["ideal"] += ideal
-                somas[q]["real"] += real
-
-        num_avaliacoes = len(dados_equipes)
+        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
         registros = []
-
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            media_ideal = round(somas[q]["ideal"] / num_avaliacoes)
-            media_real = round(somas[q]["real"] / num_avaliacoes)
-            chave = f"{q}_I{media_ideal}_R{media_real}"
-            linha = matriz[matriz["CHAVE"] == chave]
-            if not linha.empty:
-                row = linha.iloc[0]
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
+
+            soma_ideal = 0
+            soma_real = 0
+            soma_gap = 0
+            count = 0
+            afirmacao_q = None
+            dim_q = None
+            subdim_q = None
+
+            for av in dados_equipes:
+                val_real = av.get(q_real, 0)
+                val_ideal = av.get(q_ideal, 0)
+
+                try:
+                    valor_real = int(val_real)
+                    valor_ideal = int(val_ideal)
+                except:
+                    continue
+
+                chave = f"{q}_I{valor_ideal}_R{valor_real}"
+                linha = matriz[matriz["CHAVE"] == chave]
+
+                if not linha.empty:
+                    soma_ideal += float(linha.iloc[0]["PONTUACAO_IDEAL"])
+                    soma_real += float(linha.iloc[0]["PONTUACAO_REAL"])
+                    soma_gap += float(linha.iloc[0]["GAP"])
+                    count += 1
+                    if afirmacao_q is None:
+                        afirmacao_q = linha.iloc[0]["AFIRMACAO"]
+                        dim_q = linha.iloc[0]["DIMENSAO"]
+                        subdim_q = linha.iloc[0]["SUBDIMENSAO"]
+
+            if count > 0 and afirmacao_q:
                 registros.append({
                     "QUESTAO": q,
-                    "AFIRMACAO": row["AFIRMACAO"],
-                    "DIMENSAO": row["DIMENSAO"],
-                    "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "PONTUACAO_IDEAL": float(row["PONTUACAO_IDEAL"]),
-                    "PONTUACAO_REAL": float(row["PONTUACAO_REAL"]),
-                    "GAP": float(row["GAP"])
+                    "AFIRMACAO": afirmacao_q,
+                    "DIMENSAO": dim_q,
+                    "SUBDIMENSAO": subdim_q,
+                    "PONTUACAO_IDEAL": soma_ideal / count,
+                    "PONTUACAO_REAL": soma_real / count,
+                    "GAP": soma_gap / count
                 })
 
         df = pd.DataFrame(registros)
 
-        # Início do gráfico
         sns.set(style="whitegrid")
         fig, ax = plt.subplots(figsize=(16, 10))
 
@@ -1556,19 +1259,16 @@ def relatorio_gaps_por_questao():
         ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
         plt.tight_layout()
 
-        # Subtítulo no rodapé
         fig.text(0.01, 0.01, f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}", fontsize=8, color="gray")
 
         nome_arquivo = f"relatorio_gaps_questao_{emailLider}_{codrodada}.pdf"
         caminho_local = f"/tmp/{nome_arquivo}"
         plt.savefig(caminho_local)
 
-        # Upload para o Google Drive
         file_metadata = {"name": nome_arquivo, "parents": [id_lider]}
         media = MediaIoBaseUpload(open(caminho_local, "rb"), mimetype="application/pdf")
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        # Salvar também o JSON com prefixo IA_ na subpasta ia_json
         dados_json = {
             "titulo": "ANÁLISE DE MICROAMBIENTE - GAP POR QUESTÃO",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
@@ -1578,14 +1278,9 @@ def relatorio_gaps_por_questao():
 
         return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_arquivo}"}), 200
 
-
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
-
-# Código Python completo para gerar o relatório analítico conforme layout aprovado
-
-# Rota ajustada para gerar o Relatório Analítico de Microambiente com layout refinado
 
 @app.route("/relatorio-analitico-microambiente-supabase", methods=["POST", "OPTIONS"])
 def relatorio_analitico_microambiente_supabase():
@@ -1611,7 +1306,6 @@ def relatorio_analitico_microambiente_supabase():
         if not all([empresa, codrodada, emailLider]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # Buscar dados do Supabase
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
         headers = {
             "apikey": SUPABASE_KEY,
@@ -1636,96 +1330,76 @@ def relatorio_analitico_microambiente_supabase():
         if not avaliacoes:
             return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
 
-        matriz = MATRIZ_MICROAMBIENTE_DF  # DataFrame global carregado previamente
+        matriz = MATRIZ_MICROAMBIENTE_DF
 
-        # Mapeamento correto das questões
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # Questão 1
-            'Q02': 'Q10',  # Questão 10
-            'Q03': 'Q11',  # Questão 11
-            'Q04': 'Q12',  # Questão 12
-            'Q05': 'Q13',  # Questão 13
-            'Q06': 'Q14',  # Questão 14
-            'Q07': 'Q15',  # Questão 15
-            'Q08': 'Q16',  # Questão 16
-            'Q09': 'Q17',  # Questão 17
-            'Q10': 'Q18',  # Questão 18
-            'Q11': 'Q19',  # Questão 19
-            'Q12': 'Q02',  # Questão 2
-            'Q13': 'Q20',  # Questão 20
-            'Q14': 'Q21',  # Questão 21
-            'Q15': 'Q22',  # Questão 22 (Performance)
-            'Q16': 'Q23',  # Questão 23
-            'Q17': 'Q24',  # Questão 24
-            'Q18': 'Q25',  # Questão 25
-            'Q19': 'Q26',  # Questão 26
-            'Q20': 'Q27',  # Questão 27
-            'Q21': 'Q28',  # Questão 28
-            'Q22': 'Q29',  # Questão 29
-            'Q23': 'Q03',  # Questão 3
-            'Q24': 'Q30',  # Questão 30
-            'Q25': 'Q31',  # Questão 31
-            'Q26': 'Q32',  # Questão 32
-            'Q27': 'Q33',  # Questão 33
-            'Q28': 'Q34',  # Questão 34
-            'Q29': 'Q35',  # Questão 35
-            'Q30': 'Q36',  # Questão 36
-            'Q31': 'Q37',  # Questão 37
-            'Q32': 'Q38',  # Questão 38
-            'Q33': 'Q39',  # Questão 39
-            'Q34': 'Q04',  # Questão 4
-            'Q35': 'Q40',  # Questão 40
-            'Q36': 'Q41',  # Questão 41
-            'Q37': 'Q42',  # Questão 42
-            'Q38': 'Q43',  # Questão 43
-            'Q39': 'Q44',  # Questão 44
-            'Q40': 'Q45',  # Questão 45
-            'Q41': 'Q46',  # Questão 46
-            'Q42': 'Q47',  # Questão 47
-            'Q43': 'Q48',  # Questão 48
-            'Q44': 'Q05',  # Questão 5
-            'Q45': 'Q06',  # Questão 6
-            'Q46': 'Q07',  # Questão 7
-            'Q47': 'Q08',  # Questão 8
-            'Q48': 'Q09'   # Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
+
         num_avaliacoes = len(avaliacoes)
 
-        somas = {}
-        for av in avaliacoes:
-            for i in range(1, 49):
-                q = f"Q{i:02d}"
-                ideal = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}k", 0))
-                real = int(av.get(f"{MAPEAMENTO_QUESTOES[q]}C", 0))
-                if q not in somas:
-                    somas[q] = {"ideal": 0, "real": 0}
-                somas[q]["ideal"] += ideal
-                somas[q]["real"] += real
-
+        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
-            media_ideal = somas[q]["ideal"] / num_avaliacoes
-            media_real = somas[q]["real"] / num_avaliacoes
-            chave = f"{q}_I{round(media_ideal)}_R{round(media_real)}"
-            linha = matriz[matriz["CHAVE"] == chave]
+            q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
+            q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
-            if not linha.empty:
-                row = linha.iloc[0]
-                pontuacao_ideal = round((media_ideal / 6) * 100, 2)
-                pontuacao_real = round((media_real / 6) * 100, 2)
-                gap = round(pontuacao_ideal - pontuacao_real, 2)
+            soma_ideal = 0
+            soma_real = 0
+            count = 0
+            afirmacao_q = None
+            dim_q = None
+            subdim_q = None
+
+            for av in avaliacoes:
+                val_real_str = av.get(q_real)
+                val_ideal_str = av.get(q_ideal)
+
+                if val_real_str is None or val_ideal_str is None:
+                    continue
+
+                try:
+                    valor_real = int(val_real_str)
+                    valor_ideal = int(val_ideal_str)
+                except:
+                    continue
+
+                chave = f"{q}_I{valor_ideal}_R{valor_real}"
+                linha = matriz[matriz["CHAVE"] == chave]
+
+                if not linha.empty:
+                    soma_ideal += float(linha.iloc[0]["PONTUACAO_IDEAL"])
+                    soma_real += float(linha.iloc[0]["PONTUACAO_REAL"])
+                    count += 1
+                    if afirmacao_q is None:
+                        afirmacao_q = linha.iloc[0]["AFIRMACAO"]
+                        dim_q = linha.iloc[0]["DIMENSAO"]
+                        subdim_q = linha.iloc[0]["SUBDIMENSAO"]
+
+            if count > 0 and afirmacao_q:
+                media_ideal = soma_ideal / count
+                media_real = soma_real / count
+                gap = round(media_ideal - media_real, 2)
                 registros.append({
                     "QUESTAO": q,
-                    "AFIRMACAO": row["AFIRMACAO"],
-                    "DIMENSAO": row["DIMENSAO"],
-                    "SUBDIMENSAO": row["SUBDIMENSAO"],
-                    "PONTUACAO_IDEAL": pontuacao_ideal,
-                    "PONTUACAO_REAL": pontuacao_real,
+                    "AFIRMACAO": afirmacao_q,
+                    "DIMENSAO": dim_q,
+                    "SUBDIMENSAO": subdim_q,
+                    "PONTUACAO_IDEAL": round(media_ideal, 2),
+                    "PONTUACAO_REAL": round(media_real, 2),
                     "GAP": gap
                 })
 
-        
         dados_json = {
             "titulo": "RELATÓRIO ANALÍTICO DE MICROAMBIENTE",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}",
@@ -1747,7 +1421,6 @@ def relatorio_analitico_microambiente_supabase():
         return jsonify({"erro": str(e), "debug_info": "Verifique os logs."}), 500
 
 
-
 @app.route("/salvar-grafico-termometro-gaps", methods=["POST", "OPTIONS"])
 def salvar_grafico_termometro_gaps():
     if request.method == "OPTIONS":
@@ -1758,46 +1431,39 @@ def salvar_grafico_termometro_gaps():
         return response
 
     try:
-        # Importações necessárias para esta rota (verifique se já existem no topo do app.py)
-        # Removido 'matplotlib.cm' se não for usado
-        import pandas as pd # Já global
+        import pandas as pd
         import numpy as np
         import matplotlib.pyplot as plt
         import requests
         from datetime import datetime, timedelta
-        import base64 # Para imagem base64
-        import os # Para os.remove
-        from statistics import mean # Para cálculos de média
+        import base64
+        import os
+        from statistics import mean
 
         dados_requisicao = request.get_json()
         empresa = dados_requisicao.get("empresa")
         codrodada = dados_requisicao.get("codrodada")
-        emaillider_req = dados_requisicao.get("emailLider") # Usando emaillider_req para consistência
+        emaillider_req = dados_requisicao.get("emailLider")
 
         if not all([empresa, codrodada, emaillider_req]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
-        # --- Lógica de Caching: Buscar JSON do Gráfico Salvo ---
-        tipo_relatorio_grafico_atual = "microambiente_termometro_gaps" # Identificador único para este gráfico
+        tipo_relatorio_grafico_atual = "microambiente_termometro_gaps"
 
-        # SUPABASE_REST_URL e SUPABASE_KEY são variáveis globais
         url_busca_cache = f"{SUPABASE_REST_URL}/relatorios_gerados"
-
         headers_cache_busca = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
-
         params_cache = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
-            "emaillider": f"eq.{emaillider_req}", # Variável emaillider_req
+            "emaillider": f"eq.{emaillider_req}",
             "tipo_relatorio": f"eq.{tipo_relatorio_grafico_atual}",
             "order": "data_criacao.desc",
             "limit": 1
         }
 
-        print(f"DEBUG: Buscando cache do gráfico '{tipo_relatorio_grafico_atual}' no Supabase...")
         cache_response = requests.get(url_busca_cache, headers=headers_cache_busca, params=params_cache, timeout=15)
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
@@ -1805,35 +1471,22 @@ def salvar_grafico_termometro_gaps():
         if cached_data_list:
             cached_report = cached_data_list[0]
             data_criacao_cache_str = cached_report.get("data_criacao", "")
-            
             if data_criacao_cache_str:
-                data_criacao = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00')) 
-                cache_validity_period = timedelta(hours=1) # Cache válido por 1 hora
-
+                data_criacao = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
+                cache_validity_period = timedelta(hours=1)
                 if datetime.now(data_criacao.tzinfo) - data_criacao < cache_validity_period:
-                    print(f"✅ Cache válido encontrado para o gráfico '{tipo_relatorio_grafico_atual}'. Retornando dados cacheados.")
+                    print(f"✅ Cache válido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
-                else:
-                    print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' expirado. Recalculando...")
-            else:
-                print("Cache encontrado, mas sem data de criação válida. Recalculando...")
-        else:
-            print(f"Cache do gráfico '{tipo_relatorio_grafico_atual}' não encontrado. Recalculando...")
 
-        # --- Buscar consolidado de microambiente ---
-        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente" # Usando GLOBAL SUPABASE_REST_URL
-        
+        url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
         params_cons = {
             "empresa": f"eq.{empresa}",
             "codrodada": f"eq.{codrodada}",
-            "emaillider": f"eq.{emaillider_req}" # Usando emaillider_req
+            "emaillider": f"eq.{emaillider_req}"
         }
-
-        print(f"DEBUG: Buscando consolidado de microambiente no Supabase para Empresa: {empresa}, Rodada: {codrodada}, Líder: {emaillider_req}")
-        
         headers_consolidado_busca = {
-            "apikey": SUPABASE_KEY, # Usando GLOBAL SUPABASE_KEY
-            "Authorization": f"Bearer {SUPABASE_KEY}" # Usando GLOBAL SUPABASE_KEY
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
         }
 
         resp_consolidado = requests.get(url_consolidado, headers=headers_consolidado_busca, params=params_cons, timeout=30)
@@ -1843,108 +1496,59 @@ def salvar_grafico_termometro_gaps():
         if not dados_consolidado:
             return jsonify({"erro": "Consolidado não encontrado."}), 404
 
-        microambiente_consolidado = dados_consolidado[-1].get("dados_json", {}) # Assumindo que o JSON consolidado está em 'dados_json'
-        
-        # Extrair respostas para autoavaliação e equipe do JSON consolidado ANINHADO
+        microambiente_consolidado = dados_consolidado[-1].get("dados_json", {})
         avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", [])
-        
+
         if not avaliacoes:
             return jsonify({"erro": "Nenhuma avaliação de equipe encontrada no consolidado."}), 400
 
-        # --- Usar DataFrames globais para as matrizes ---
-        matriz = MATRIZ_MICROAMBIENTE_DF # Usando global
+        matriz = MATRIZ_MICROAMBIENTE_DF
 
         MAPEAMENTO_QUESTOES = {
-            'Q01': 'Q01',  # Questão 1
-            'Q02': 'Q10',  # Questão 10
-            'Q03': 'Q11',  # Questão 11
-            'Q04': 'Q12',  # Questão 12
-            'Q05': 'Q13',  # Questão 13
-            'Q06': 'Q14',  # Questão 14
-            'Q07': 'Q15',  # Questão 15
-            'Q08': 'Q16',  # Questão 16
-            'Q09': 'Q17',  # Questão 17
-            'Q10': 'Q18',  # Questão 18
-            'Q11': 'Q19',  # Questão 19
-            'Q12': 'Q02',  # Questão 2
-            'Q13': 'Q20',  # Questão 20
-            'Q14': 'Q21',  # Questão 21
-            'Q15': 'Q22',  # Questão 22 (Performance)
-            'Q16': 'Q23',  # Questão 23
-            'Q17': 'Q24',  # Questão 24
-            'Q18': 'Q25',  # Questão 25
-            'Q19': 'Q26',  # Questão 26
-            'Q20': 'Q27',  # Questão 27
-            'Q21': 'Q28',  # Questão 28
-            'Q22': 'Q29',  # Questão 29
-            'Q23': 'Q03',  # Questão 3
-            'Q24': 'Q30',  # Questão 30
-            'Q25': 'Q31',  # Questão 31
-            'Q26': 'Q32',  # Questão 32
-            'Q27': 'Q33',  # Questão 33
-            'Q28': 'Q34',  # Questão 34
-            'Q29': 'Q35',  # Questão 35
-            'Q30': 'Q36',  # Questão 36
-            'Q31': 'Q37',  # Questão 37
-            'Q32': 'Q38',  # Questão 38
-            'Q33': 'Q39',  # Questão 39
-            'Q34': 'Q04',  # Questão 4
-            'Q35': 'Q40',  # Questão 40
-            'Q36': 'Q41',  # Questão 41
-            'Q37': 'Q42',  # Questão 42
-            'Q38': 'Q43',  # Questão 43
-            'Q39': 'Q44',  # Questão 44
-            'Q40': 'Q45',  # Questão 45
-            'Q41': 'Q46',  # Questão 46
-            'Q42': 'Q47',  # Questão 47
-            'Q43': 'Q48',  # Questão 48
-            'Q44': 'Q05',  # Questão 5
-            'Q45': 'Q06',  # Questão 6
-            'Q46': 'Q07',  # Questão 7
-            'Q47': 'Q08',  # Questão 8
-            'Q48': 'Q09'   # Questão 9
+            'Q01': 'Q01', 'Q02': 'Q10', 'Q03': 'Q11', 'Q04': 'Q12', 'Q05': 'Q13',
+            'Q06': 'Q14', 'Q07': 'Q15', 'Q08': 'Q16', 'Q09': 'Q17', 'Q10': 'Q18',
+            'Q11': 'Q19', 'Q12': 'Q02', 'Q13': 'Q20', 'Q14': 'Q21', 'Q15': 'Q22',
+            'Q16': 'Q23', 'Q17': 'Q24', 'Q18': 'Q25', 'Q19': 'Q26', 'Q20': 'Q27',
+            'Q21': 'Q28', 'Q22': 'Q29', 'Q23': 'Q03', 'Q24': 'Q30', 'Q25': 'Q31',
+            'Q26': 'Q32', 'Q27': 'Q33', 'Q28': 'Q34', 'Q29': 'Q35', 'Q30': 'Q36',
+            'Q31': 'Q37', 'Q32': 'Q38', 'Q33': 'Q39', 'Q34': 'Q04', 'Q35': 'Q40',
+            'Q36': 'Q41', 'Q37': 'Q42', 'Q38': 'Q43', 'Q39': 'Q44', 'Q40': 'Q45',
+            'Q41': 'Q46', 'Q42': 'Q47', 'Q43': 'Q48', 'Q44': 'Q05', 'Q45': 'Q06',
+            'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
-        pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF # Usando global
-        pontos_subdim = TABELA_SUBDIMENSAO_MICROAMBIENTE_DF # Usando global para subdimensoes
 
-
+        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente, conta GAPs > 20
         gap_count = 0
         num_avaliacoes = len(avaliacoes)
 
-        for i in range(1, 49): # Iterar sobre as questões Q01 a Q48
+        for i in range(1, 49):
             q = f"Q{i:02d}"
             q_real = f"{MAPEAMENTO_QUESTOES[q]}C"
             q_ideal = f"{MAPEAMENTO_QUESTOES[q]}k"
 
-            # Converte as respostas para INT de forma segura (para equipe)
-            reais = []
-            for av in avaliacoes:
-                val_str = av.get(q_real)
-                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
-                    reais.append(int(val_str))
-            
-            ideais = []
-            for av in avaliacoes:
-                val_str = av.get(q_ideal)
-                if val_str is not None and isinstance(val_str, str) and val_str.strip().isdigit():
-                    ideais.append(int(val_str))
+            gaps_individuais = []
 
-            if not reais or not ideais:
-                continue # Pula a questão se não houver dados válidos
+            for av in avaliacoes:
+                val_str_r = av.get(q_real)
+                val_str_i = av.get(q_ideal)
 
-            media_real = round(sum(reais) / len(reais))
-            media_ideal = round(sum(ideais) / len(ideais))
-            
-            chave = f"{q}_I{media_ideal}_R{media_real}"
-            
-            linha = matriz[matriz["CHAVE"] == chave]
-            
-            if not linha.empty:
-                # O GAP na sua tabela é uma string, converta para float de forma segura
-                # --- CORREÇÃO: Simplificar a conversão de gap_val ---
-                gap_val = float(linha.iloc[0]["GAP"]) # Converte diretamente para float
-                # --- FIM DA CORREÇÃO ---
-                if abs(gap_val) > 20: # Usa o gap_val já numérico
+                if val_str_r is None or val_str_i is None:
+                    continue
+                if not str(val_str_r).strip().isdigit() or not str(val_str_i).strip().isdigit():
+                    continue
+
+                valor_real = int(val_str_r)
+                valor_ideal = int(val_str_i)
+
+                chave = f"{q}_I{valor_ideal}_R{valor_real}"
+                linha = matriz[matriz["CHAVE"] == chave]
+
+                if not linha.empty:
+                    gaps_individuais.append(float(linha.iloc[0]["GAP"]))
+
+            if gaps_individuais:
+                gap_medio = sum(gaps_individuais) / len(gaps_individuais)
+                if abs(gap_medio) > 20:
                     gap_count += 1
 
         def classificar_microambiente(gaps):
@@ -1960,49 +1564,35 @@ def salvar_grafico_termometro_gaps():
                 return "DESMOTIVAÇÃO"
 
         classificacao_texto = classificar_microambiente(gap_count)
-        
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-        # --- GERAÇÃO DO GRÁFICO (MATPLOTLIB) EM MEMÓRIA E CONVERSÃO PARA BASE64 ---
-        # Este é o código do gráfico que você me enviou no HTML
-        # Ajustado para usar as variáveis e nomes consistentes
-        
-        # Ajuste para plotar o termômetro (você deve ter o código que plota o termômetro aqui)
-        # Exemplo de placeholder para plotting (SUBSTITUA PELO SEU CÓDIGO REAL DE PLOTAGEM DO TERMÔMETRO)
-        fig, ax = plt.subplots(figsize=(6, 6)) # Dimensões do termômetro
+        fig, ax = plt.subplots(figsize=(6, 6))
         ax.set_xlim(0, 10)
         ax.set_ylim(0, 10)
-        ax.text(5, 5, f"GAPs: {gap_count}\nClassificação: {classificacao_texto}", 
+        ax.text(5, 5, f"GAPs: {gap_count}\nClassificação: {classificacao_texto}",
                 ha='center', va='center', fontsize=16, color='black')
-        ax.axis('off') # Remove os eixos
+        ax.axis('off')
         plt.title(f"TERMÔMETRO DE GAPS\n{empresa} - {codrodada} - {emaillider_req}", fontsize=14)
         plt.tight_layout()
-        
-        # Salvar o gráfico em um buffer de memória e converter para base64
-        import io # Importar io para BytesIO
-        from PIL import Image # Importar Pillow para lidar com imagem
 
+        import io
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight') # Salva em PNG no buffer
-        plt.close(fig) # Fecha a figura para liberar memória
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
         buf.seek(0)
         imagem_base64 = base64.b64encode(buf.read()).decode("utf-8")
 
-
-        dados_json_retorno = { # Renomeado para evitar conflito com 'dados_json' usado no payload
+        dados_json_retorno = {
             "titulo": "STATUS - TERMÔMETRO DE MICROAMBIENTE",
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
             "info_avaliacoes": f"Equipe: {num_avaliacoes} respondentes",
             "qtdGapsAcima20": gap_count,
             "porcentagemGaps": round((gap_count / 48) * 100, 1),
             "classificacao": classificacao_texto,
-            "imagemBase64": f"data:image/png;base64,{imagem_base64}" # Prefixo para uso direto no HTML img src
+            "imagemBase64": f"data:image/png;base64,{imagem_base64}"
         }
-        
-        # --- Chamar a função para salvar os dados do gráfico gerados no Supabase ---
-        salvar_json_no_supabase(dados_json_retorno, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
 
-        # Retornando o JSON completo para o navegador
+        salvar_json_no_supabase(dados_json_retorno, empresa, codrodada, emaillider_req, tipo_relatorio_grafico_atual)
         return jsonify(dados_json_retorno), 200
 
     except Exception as e:
@@ -2011,10 +1601,8 @@ def salvar_grafico_termometro_gaps():
         print("🚨🚨🚨 ERRO CRÍTICO NA ROTA salvar-grafico-termometro-gaps 🚨🚨🚨")
         print(f"Tipo do erro: {type(e).__name__}")
         print(f"Mensagem do erro: {str(e)}")
-        print("TRACEBACK COMPLETO ABAIXO:")
         traceback.print_exc()
         print("="*50 + "\n")
-        
         return jsonify({"erro": str(e), "debug_info": "Verifique os logs do Render.com para detalhes."}), 500
 
 
@@ -2030,7 +1618,6 @@ def salvar_consolidado_microambiente():
         emailLider = dados.get("emailLider", "").strip().lower()
 
         print(f"✅ Dados recebidos: {empresa} {codrodada} {emailLider}")
-        print("🔁 Iniciando chamada ao Supabase com os dados validados...")
 
         supabase_url = os.environ.get("SUPABASE_REST_URL")
         supabase_key = os.environ.get("SUPABASE_KEY")
@@ -2041,7 +1628,6 @@ def salvar_consolidado_microambiente():
             "Content-Type": "application/json"
         }
 
-        # 🔍 Buscar autoavaliação
         filtro_auto = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=ilike.microambiente_autoavaliacao"
         url_auto = f"{supabase_url}/relatorios_microambiente{filtro_auto}"
         resp_auto = requests.get(url_auto, headers=headers)
@@ -2054,7 +1640,6 @@ def salvar_consolidado_microambiente():
 
         autoavaliacao = auto_data[0]["dados_json"]
 
-        # 🔍 Buscar avaliações de equipe
         filtro_equipe = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_equipe"
         url_equipe = f"{supabase_url}/relatorios_microambiente{filtro_equipe}"
         resp_equipe = requests.get(url_equipe, headers=headers)
@@ -2067,13 +1652,11 @@ def salvar_consolidado_microambiente():
             print("❌ Nenhuma avaliação de equipe encontrada.")
             return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 404
 
-        # 🧩 Montar JSON final
         consolidado = {
             "autoavaliacao": autoavaliacao,
             "avaliacoesEquipe": avaliacoes_equipe
         }
-        
-        # 💾 Salvar na tabela final
+
         payload = {
             "empresa": empresa,
             "codrodada": codrodada,
@@ -2100,11 +1683,9 @@ def salvar_consolidado_microambiente():
 
 @app.route("/recuperar-json", methods=["GET"])
 def recuperar_json():
-    # As variáveis SUPABASE_REST_URL e SUPABASE_KEY são globais, devem estar acessíveis aqui.
-
     empresa = request.args.get("empresa", "").strip().lower()
     rodada = request.args.get("codrodada", "").strip().lower()
-    email_lider = request.args.get("emaillider", "").strip().lower() # Frontend envia emailLider, mas Supabase é emaillider
+    email_lider = request.args.get("emaillider", "").strip().lower()
     tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
 
     print("🔍 RECEBIDO NA ROTA /recuperar-json")
@@ -2135,13 +1716,13 @@ def recuperar_json():
         print("📦 Status Supabase:", resp.status_code)
         print("📄 Resposta Supabase (texto):", resp.text)
 
-        resp.raise_for_status() # Lança um erro para status HTTP ruins (4xx ou 5xx)
+        resp.raise_for_status()
 
         resultados = resp.json()
         if not resultados:
             return jsonify({"erro": f"JSON do tipo '{tipo_relatorio}' não encontrado para os dados fornecidos."}), 404
 
-        return jsonify(resultados[0]["dados_json"]) # Retorna apenas o 'dados_json'
+        return jsonify(resultados[0]["dados_json"])
 
     except requests.exceptions.RequestException as e:
         print(f"❌ Erro de comunicação com o Supabase na rota /recuperar-json: {e}")
@@ -2186,3 +1767,5 @@ def debug_json():
         return jsonify({"erro": "Erro ao consultar Supabase"}), 500
 
 
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
