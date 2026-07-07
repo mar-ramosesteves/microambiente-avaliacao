@@ -19,6 +19,33 @@ CORS(app, resources={r"/*": {"origins": ["https://gestor.thehrkey.tech"]}}, supp
 
 # --- 3. FUNÇÕES AUXILIARES GLOBAIS ---
 
+def buscar_primeira_resposta_microambiente(url_supabase, headers, empresa, codrodada, email_lider, tipo, email):
+    params = {
+        "select": "id,data_criacao",
+        "empresa": f"eq.{empresa}",
+        "codrodada": f"eq.{codrodada}",
+        "emailLider": f"eq.{email_lider}",
+        "tipo": f"eq.{tipo}",
+        "email": f"eq.{email}",
+        "order": "data_criacao.asc",
+        "limit": "1"
+    }
+    resposta = requests.get(url_supabase, headers=headers, params=params, timeout=30)
+    if resposta.status_code != 200:
+        print("Erro ao verificar duplicidade no Supabase:", resposta.status_code, resposta.text)
+        return None
+    dados = resposta.json()
+    return dados[0] if dados else None
+
+def primeiras_respostas_por_email(registros):
+    primeiras = {}
+    for registro in sorted(registros, key=lambda r: r.get("data_criacao") or ""):
+        dados_json = registro.get("dados_json") or {}
+        email = (dados_json.get("email") or registro.get("email") or "").strip().lower()
+        if email and email not in primeiras:
+            primeiras[email] = dados_json
+    return list(primeiras.values())
+
 def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_val, tipo_do_json):
     if not SUPABASE_REST_URL or not SUPABASE_KEY:
         print("❌ Não foi possível salvar no Supabase: Variáveis de ambiente não configuradas.")
@@ -168,8 +195,9 @@ def enviar_avaliacao():
         codrodada = dados.get("codrodada", "").strip().lower()
         emailLider = dados.get("emailLider", "").strip().lower()
         tipo = dados.get("tipo", "").strip().lower()
+        email = dados.get("email", "").strip().lower()
 
-        if not all([empresa, codrodada, emailLider, tipo]):
+        if not all([empresa, codrodada, emailLider, tipo, email]):
             return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
 
         url_supabase = "https://xmsjjknpnowsswwrbvpc.supabase.co/rest/v1/relatorios_microambiente"
@@ -181,13 +209,30 @@ def enviar_avaliacao():
             "Prefer": "return=representation"
         }
 
+        resposta_existente = buscar_primeira_resposta_microambiente(
+            url_supabase,
+            headers,
+            empresa,
+            codrodada,
+            emailLider,
+            tipo,
+            email
+        )
+
+        if resposta_existente:
+            return jsonify({
+                "erro": "inventario_ja_respondido",
+                "mensagem": "Este inventario ja foi respondido anteriormente.",
+                "data_criacao": resposta_existente.get("data_criacao")
+            }), 409
+
         registro = {
             "empresa": empresa,
             "codrodada": codrodada,
             "emailLider": emailLider,
             "tipo": tipo,
             "nome": dados.get("nome", "").strip(),
-            "email": dados.get("email", "").strip().lower(),
+            "email": email,
             "nomeLider": dados.get("nomeLider", "").strip(),
             "departamento": dados.get("departamento", "").strip(),
             "estado": dados.get("estado", "").strip(),
@@ -222,6 +267,48 @@ def enviar_avaliacao():
     except Exception as e:
         print("❌ Erro ao processar dados:", str(e))
         return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/verificar-avaliacao", methods=["POST", "OPTIONS"])
+def verificar_avaliacao_microambiente():
+    if request.method == "OPTIONS":
+        return '', 200
+
+    dados = request.get_json() or {}
+    empresa = dados.get("empresa", "").strip().lower()
+    codrodada = dados.get("codrodada", "").strip().lower()
+    emailLider = dados.get("emailLider", "").strip().lower()
+    tipo = dados.get("tipo", "").strip().lower()
+    email = dados.get("email", "").strip().lower()
+
+    if not all([empresa, codrodada, emailLider, tipo, email]):
+        return jsonify({"erro": "Campos obrigatorios ausentes."}), 400
+
+    url_supabase = "https://xmsjjknpnowsswwrbvpc.supabase.co/rest/v1/relatorios_microambiente"
+    headers = {
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhtc2pqa25wbm93c3N3d3JidnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI1MDg0NDUsImV4cCI6MjA2ODA4NDQ0NX0.OexXJX7lK_DefGb72VDWGLDcUXamoQIgYOv5Zo_e9L4",
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhtc2pqa25wbm93c3N3d3JidnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI1MDg0NDUsImV4cCI6MjA2ODA4NDQ0NX0.OexXJX7lK_DefGb72VDWGLDcUXamoQIgYOv5Zo_e9L4",
+        "Content-Type": "application/json"
+    }
+
+    resposta_existente = buscar_primeira_resposta_microambiente(
+        url_supabase,
+        headers,
+        empresa,
+        codrodada,
+        emailLider,
+        tipo,
+        email
+    )
+
+    if resposta_existente:
+        return jsonify({
+            "respondido": True,
+            "mensagem": "Este inventario ja foi respondido anteriormente.",
+            "data_criacao": resposta_existente.get("data_criacao")
+        }), 200
+
+    return jsonify({"respondido": False}), 200
 
 
 @app.route("/grafico-autoavaliacao", methods=["POST"])
@@ -1628,7 +1715,7 @@ def salvar_consolidado_microambiente():
             "Content-Type": "application/json"
         }
 
-        filtro_auto = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=ilike.microambiente_autoavaliacao"
+        filtro_auto = f"?select=dados_json,data_criacao&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=ilike.microambiente_autoavaliacao&order=data_criacao.asc&limit=1"
         url_auto = f"{supabase_url}/relatorios_microambiente{filtro_auto}"
         resp_auto = requests.get(url_auto, headers=headers)
         auto_data = resp_auto.json()
@@ -1640,13 +1727,13 @@ def salvar_consolidado_microambiente():
 
         autoavaliacao = auto_data[0]["dados_json"]
 
-        filtro_equipe = f"?select=dados_json&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_equipe"
+        filtro_equipe = f"?select=dados_json,data_criacao,email&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_equipe&order=data_criacao.asc"
         url_equipe = f"{supabase_url}/relatorios_microambiente{filtro_equipe}"
         resp_equipe = requests.get(url_equipe, headers=headers)
         equipe_data = resp_equipe.json()
         print("📥 Resultado da requisição EQUIPE:", equipe_data)
 
-        avaliacoes_equipe = [r["dados_json"] for r in equipe_data if "dados_json" in r]
+        avaliacoes_equipe = primeiras_respostas_por_email(equipe_data)
 
         if not avaliacoes_equipe:
             print("❌ Nenhuma avaliação de equipe encontrada.")
