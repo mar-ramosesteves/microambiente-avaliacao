@@ -2094,7 +2094,35 @@ def salvar_consolidado_microambiente():
         }
 
         url_final = f"{supabase_url}/consolidado_microambiente"
-        resp_final = requests.post(url_final, headers=headers, json=payload)
+
+
+        
+        filtro_existente = {
+            "select": "id",
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emaillider": f"eq.{emailLider}",
+            "order": "data_criacao.desc",
+            "limit": "1"
+        }
+        resp_existente = requests.get(url_final, headers=headers, params=filtro_existente, timeout=30)
+        
+        if resp_existente.status_code != 200:
+            print("Erro ao verificar consolidado existente:", resp_existente.text)
+            return jsonify({"erro": "Erro ao verificar consolidado existente."}), 500
+        
+        existentes = resp_existente.json() or []
+        
+        if existentes:
+            consolidado_id = existentes[0].get("id")
+            url_update = f"{url_final}?id=eq.{consolidado_id}"
+            resp_final = requests.patch(url_update, headers=headers, json=payload, timeout=30)
+            acao = "atualizado"
+        else:
+            resp_final = requests.post(url_final, headers=headers, json=payload, timeout=30)
+            acao = "criado"
+
+        
 
         if resp_final.status_code not in [200, 201]:
             print("❌ Erro ao salvar no Supabase:", resp_final.text)
