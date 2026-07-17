@@ -171,6 +171,250 @@ def listar_lideres_consolidacao():
         traceback.print_exc()
         return jsonify({"erro": str(e)}), 500
 
+@app.route("/listar-lideres-consolidacao-v2", methods=["GET", "OPTIONS"])
+def listar_lideres_consolidacao_v2():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    empresa = request.args.get("empresa", "").strip().lower()
+    holding = request.args.get("holding", "").strip().lower()
+    codrodada = request.args.get("codrodada", "").strip().lower()
+
+    if (not empresa and not holding) or not codrodada:
+        return jsonify({"erro": "Informe empresa ou holding, e codrodada para listar os lideres."}), 400
+
+    if not SUPABASE_REST_URL or not SUPABASE_KEY:
+        return jsonify({"erro": "Supabase nao configurado no servico."}), 500
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+
+    tabelas = [
+        ("relatorios_microambiente", "microambiente"),
+        ("relatorios_arquetipos", "arquetipos")
+    ]
+    lideres = {}
+
+    def norm(value):
+        return str(value or "").strip().lower()
+
+    def empresas_da_holding(holding_nome):
+        if not holding_nome:
+            return set()
+
+        url = f"{SUPABASE_REST_URL}/employees"
+        params = {
+            "select": "holding,empresa,company_name",
+            "holding": f"ilike.{holding_nome}",
+            "limit": "10000"
+        }
+
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        if resp.status_code != 200:
+            print(f"Erro ao buscar empresas da holding: {resp.status_code} {resp.text}")
+            return set()
+
+        empresas = set()
+        for row in resp.json() or []:
+            for campo in ("empresa", "company_name"):
+                valor = norm(row.get(campo))
+                if valor:
+                    empresas.add(valor)
+        return empresas
+
+    def tipo_resposta(tipo):
+        tipo_norm = str(tipo or "").strip().lower()
+        if "auto" in tipo_norm:
+            return "autoavaliacoes"
+        if "equipe" in tipo_norm or "avaliacao" in tipo_norm or "avalia" in tipo_norm:
+            return "avaliacoes_equipe"
+        return "outras"
+
+    try:
+        empresa_filtro = "" if empresa in ("todas", "todos", "__todas__", "__todos__") else empresa
+        empresas_permitidas = empresas_da_holding(holding) if holding and not empresa_filtro else set()
+
+        if holding and not empresa_filtro and not empresas_permitidas:
+            return jsonify({
+                "erro": "Nenhuma empresa encontrada para a holding informada.",
+                "holding": holding
+            }), 404
+
+        for tabela, origem in tabelas:
+            url = f"{SUPABASE_REST_URL}/{tabela}"
+            params = {
+                "select": "empresa,emailLider,tipo,email",
+                "codrodada": f"eq.{codrodada}",
+                "emailLider": "not.is.null",
+                "limit": "10000"
+            }
+
+            if empresa_filtro:
+                params["empresa"] = f"eq.{empresa_filtro}"
+
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
+            if resp.status_code != 200:
+                print(f"Erro ao listar lideres em {tabela}: {resp.status_code} {resp.text}")
+                return jsonify({
+                    "erro": f"Erro ao consultar {tabela}.",
+                    "detalhe": resp.text
+                }), 500
+
+            for row in resp.json() or []:
+                email_lider = str(row.get("emailLider") or "").strip().lower()
+                empresa_row = norm(row.get("empresa"))
+                if not email_lider or not empresa_row:
+                    continue
+
+                if empresas_permitidas and empresa_row not in empresas_permitidas:
+                    continue
+
+                chave = f"{empresa_row}|{email_lider}"
+
+                if chave not in lideres:
+                    lideres[chave] = {
+                        "empresa": empresa_row,
+                        "holding": holding or "",
+                        "emailLider": email_lider,
+                        "microambiente": {
+                            "autoavaliacoes": 0,
+                            "avaliacoes_equipe": 0,
+                            "outras": 0,
+                            "total": 0
+                        },
+                        "arquetipos": {
+                            "autoavaliacoes": 0,
+                            "avaliacoes_equipe": 0,
+                            "outras": 0,
+                            "total": 0
+                        },
+                        "total_respostas": 0
+                    }
+
+                bucket = lideres[chave][origem]
+                categoria = tipo_resposta(row.get("tipo"))
+                bucket[categoria] += 1
+                bucket["total"] += 1
+                lideres[chave]["total_respostas"] += 1
+
+        lista = sorted(lideres.values(), key=lambda item: (item["empresa"], item["emailLider"]))
+
+        return jsonify({
+            "success": True,
+            "empresa": empresa,
+            "holding": holding,
+            "codrodada": codrodada,
+            "total_lideres": len(lista),
+            "lideres": lista
+        }), 200
+
+    except Exception as e:
+        print("Erro geral em /listar-lideres-consolidacao-v2:", str(e))
+        traceback.print_exc()
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/listar-contextos-consolidacao", methods=["GET", "OPTIONS"])
+def listar_contextos_consolidacao():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    if not SUPABASE_REST_URL or not SUPABASE_KEY:
+        return jsonify({"erro": "Supabase nao configurado no servico."}), 500
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+
+    def norm(value):
+        return str(value or "").strip().lower()
+
+    try:
+        empresas_com_respostas = set()
+        for tabela in ("relatorios_microambiente", "relatorios_arquetipos"):
+            url = f"{SUPABASE_REST_URL}/{tabela}"
+            params = {
+                "select": "empresa",
+                "empresa": "not.is.null",
+                "limit": "10000"
+            }
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
+            if resp.status_code == 200:
+                for row in resp.json() or []:
+                    empresa = norm(row.get("empresa"))
+                    if empresa:
+                        empresas_com_respostas.add(empresa)
+            else:
+                print(f"Erro ao consultar {tabela}: {resp.status_code} {resp.text}")
+
+        url_emp = f"{SUPABASE_REST_URL}/employees"
+        params_emp = {
+            "select": "holding,empresa,company_name",
+            "limit": "10000"
+        }
+        resp_emp = requests.get(url_emp, headers=headers, params=params_emp, timeout=30)
+        if resp_emp.status_code != 200:
+            return jsonify({
+                "erro": "Erro ao consultar employees.",
+                "detalhe": resp_emp.text
+            }), 500
+
+        empresas_map = {}
+        holdings_map = {}
+
+        for row in resp_emp.json() or []:
+            holding = norm(row.get("holding"))
+            empresa = norm(row.get("empresa") or row.get("company_name"))
+            if not empresa:
+                continue
+
+            if empresa not in empresas_map:
+                empresas_map[empresa] = {
+                    "empresa": empresa,
+                    "label": empresa.upper(),
+                    "holding": holding,
+                    "tem_respostas": empresa in empresas_com_respostas
+                }
+
+            if holding:
+                if holding not in holdings_map:
+                    holdings_map[holding] = {
+                        "holding": holding,
+                        "label": holding.upper(),
+                        "empresas": set(),
+                        "empresas_com_respostas": set()
+                    }
+                holdings_map[holding]["empresas"].add(empresa)
+                if empresa in empresas_com_respostas:
+                    holdings_map[holding]["empresas_com_respostas"].add(empresa)
+
+        holdings = []
+        for item in holdings_map.values():
+            holdings.append({
+                "holding": item["holding"],
+                "label": item["label"],
+                "empresas": sorted(item["empresas"]),
+                "qtd_empresas": len(item["empresas"]),
+                "qtd_empresas_com_respostas": len(item["empresas_com_respostas"])
+            })
+
+        empresas = sorted(empresas_map.values(), key=lambda item: item["label"])
+        holdings = sorted(holdings, key=lambda item: item["label"])
+
+        return jsonify({
+            "success": True,
+            "empresas": empresas,
+            "holdings": holdings
+        }), 200
+
+    except Exception as e:
+        print("Erro geral em /listar-contextos-consolidacao:", str(e))
+        traceback.print_exc()
+        return jsonify({"erro": str(e)}), 500
+
 # --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS --
 try:
     TABELA_DIMENSAO_MICROAMBIENTE_DF = pd.read_excel("pontos_maximos_dimensao.xlsx")
