@@ -75,7 +75,103 @@ def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_va
         print(f"❌ Erro ao salvar JSON do tipo '{tipo_do_json}' no Supabase: {e}")
         return False
 
-# --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS ---
+@app.route("/listar-lideres-consolidacao", methods=["GET", "OPTIONS"])
+def listar_lideres_consolidacao():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    empresa = request.args.get("empresa", "").strip().lower()
+    codrodada = request.args.get("codrodada", "").strip().lower()
+
+    if not empresa or not codrodada:
+        return jsonify({"erro": "Informe empresa e codrodada para listar os lideres."}), 400
+
+    if not SUPABASE_REST_URL or not SUPABASE_KEY:
+        return jsonify({"erro": "Supabase nao configurado no servico."}), 500
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+
+    tabelas = [
+        ("relatorios_microambiente", "microambiente"),
+        ("relatorios_arquetipos", "arquetipos")
+    ]
+    lideres = {}
+
+    def tipo_resposta(tipo):
+        tipo_norm = str(tipo or "").strip().lower()
+        if "auto" in tipo_norm:
+            return "autoavaliacoes"
+        if "equipe" in tipo_norm or "avaliacao" in tipo_norm or "avalia" in tipo_norm:
+            return "avaliacoes_equipe"
+        return "outras"
+
+    try:
+        for tabela, origem in tabelas:
+            url = f"{SUPABASE_REST_URL}/{tabela}"
+            params = {
+                "select": "emailLider,tipo,email",
+                "empresa": f"eq.{empresa}",
+                "codrodada": f"eq.{codrodada}",
+                "emailLider": "not.is.null",
+                "limit": "10000"
+            }
+
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
+            if resp.status_code != 200:
+                print(f"Erro ao listar lideres em {tabela}: {resp.status_code} {resp.text}")
+                return jsonify({
+                    "erro": f"Erro ao consultar {tabela}.",
+                    "detalhe": resp.text
+                }), 500
+
+            for row in resp.json() or []:
+                email_lider = str(row.get("emailLider") or "").strip().lower()
+                if not email_lider:
+                    continue
+
+                if email_lider not in lideres:
+                    lideres[email_lider] = {
+                        "emailLider": email_lider,
+                        "microambiente": {
+                            "autoavaliacoes": 0,
+                            "avaliacoes_equipe": 0,
+                            "outras": 0,
+                            "total": 0
+                        },
+                        "arquetipos": {
+                            "autoavaliacoes": 0,
+                            "avaliacoes_equipe": 0,
+                            "outras": 0,
+                            "total": 0
+                        },
+                        "total_respostas": 0
+                    }
+
+                bucket = lideres[email_lider][origem]
+                categoria = tipo_resposta(row.get("tipo"))
+                bucket[categoria] += 1
+                bucket["total"] += 1
+                lideres[email_lider]["total_respostas"] += 1
+
+        lista = sorted(lideres.values(), key=lambda item: item["emailLider"])
+
+        return jsonify({
+            "success": True,
+            "empresa": empresa,
+            "codrodada": codrodada,
+            "total_lideres": len(lista),
+            "lideres": lista
+        }), 200
+
+    except Exception as e:
+        print("Erro geral em /listar-lideres-consolidacao:", str(e))
+        traceback.print_exc()
+        return jsonify({"erro": str(e)}), 500
+
+# --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS --
 try:
     TABELA_DIMENSAO_MICROAMBIENTE_DF = pd.read_excel("pontos_maximos_dimensao.xlsx")
     print("DEBUG: pontos_maximos_dimensao.xlsx carregada com sucesso.")
