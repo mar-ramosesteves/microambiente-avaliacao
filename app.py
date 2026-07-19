@@ -131,7 +131,7 @@ def listar_lideres_consolidacao():
         for tabela, origem in tabelas:
             url = f"{SUPABASE_REST_URL}/{tabela}"
             params = {
-                "select": "emailLider,tipo,email",
+                "select": "empresa,emailLider,tipo,email",
                 "codrodada": f"eq.{codrodada}",
                 "emailLider": "not.is.null",
                 "limit": "10000"
@@ -157,6 +157,7 @@ def listar_lideres_consolidacao():
                 if email_lider not in lideres:
                     lideres[email_lider] = {
                         "emailLider": email_lider,
+                        "empresa": str(row.get("empresa") or "").strip().lower(),
                         "microambiente": {
                             "autoavaliacoes": 0,
                             "avaliacoes_equipe": 0,
@@ -171,6 +172,8 @@ def listar_lideres_consolidacao():
                         },
                         "total_respostas": 0
                     }
+                elif not lideres[email_lider].get("empresa"):
+                    lideres[email_lider]["empresa"] = str(row.get("empresa") or "").strip().lower()
 
                 bucket = lideres[email_lider][origem]
                 categoria = tipo_resposta(row.get("tipo"))
