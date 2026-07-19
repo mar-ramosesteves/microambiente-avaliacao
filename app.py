@@ -1914,7 +1914,7 @@ def salvar_consolidado_microambiente():
             resp_final = requests.post(url_final, headers=headers, json=payload, timeout=30)
             acao = "criado"
 
-        if resp_final.status_code not in [200, 201]:
+        if resp_final.status_code not in [200, 201, 204]:
             print("âŒ Erro ao salvar no Supabase:", resp_final.text)
             return jsonify({"erro": "Erro ao salvar consolidado."}), 500
 
