@@ -76,6 +76,7 @@ def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_va
         return False
 
 @app.route("/listar-lideres-consolidacao", methods=["GET", "OPTIONS"])
+@app.route("/listar-lideres-consolidacao-v2", methods=["GET", "OPTIONS"])
 def listar_lideres_consolidacao():
     if request.method == "OPTIONS":
         return "", 204
@@ -83,7 +84,12 @@ def listar_lideres_consolidacao():
     empresa = request.args.get("empresa", "").strip().lower()
     codrodada = request.args.get("codrodada", "").strip().lower()
 
-    if not empresa or not codrodada:
+    empresa_eh_todas = (
+        not empresa
+        or empresa in ["todas", "todos", "todas as empresas da holding", "all", "*"]
+    )
+
+    if not codrodada:
         return jsonify({"erro": "Informe empresa e codrodada para listar os lideres."}), 400
 
     if not SUPABASE_REST_URL or not SUPABASE_KEY:
@@ -113,11 +119,12 @@ def listar_lideres_consolidacao():
             url = f"{SUPABASE_REST_URL}/{tabela}"
             params = {
                 "select": "emailLider,tipo,email",
-                "empresa": f"eq.{empresa}",
                 "codrodada": f"eq.{codrodada}",
                 "emailLider": "not.is.null",
                 "limit": "10000"
             }
+            if not empresa_eh_todas:
+                params["empresa"] = f"eq.{empresa}"
 
             resp = requests.get(url, headers=headers, params=params, timeout=30)
             if resp.status_code != 200:
