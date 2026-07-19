@@ -9,15 +9,15 @@ import traceback
 from statistics import mean
 import base64
 
-# --- 1. DEFINIÇÃO DE VARIÁVEIS DE AMBIENTE GLOBAIS ---
+# --- 1. DEFINIÃ‡ÃƒO DE VARIÃVEIS DE AMBIENTE GLOBAIS ---
 SUPABASE_REST_URL = os.environ.get("SUPABASE_REST_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-# --- 2. INICIALIZAÇÃO DO FLASK E CORS ---
+# --- 2. INICIALIZAÃ‡ÃƒO DO FLASK E CORS ---
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["https://gestor.thehrkey.tech"]}}, supports_credentials=True)
 
-# --- 3. FUNÇÕES AUXILIARES GLOBAIS ---
+# --- 3. FUNÃ‡Ã•ES AUXILIARES GLOBAIS ---
 
 def buscar_primeira_resposta_microambiente(url_supabase, headers, empresa, codrodada, email_lider, tipo, email):
     params = {
@@ -48,7 +48,7 @@ def primeiras_respostas_por_email(registros):
 
 def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_val, tipo_do_json):
     if not SUPABASE_REST_URL or not SUPABASE_KEY:
-        print("❌ Não foi possível salvar no Supabase: Variáveis de ambiente não configuradas.")
+        print("âŒ NÃ£o foi possÃ­vel salvar no Supabase: VariÃ¡veis de ambiente nÃ£o configuradas.")
         return False
 
     url_tabela = f"{SUPABASE_REST_URL}/relatorios_gerados"
@@ -69,10 +69,10 @@ def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_va
     try:
         response = requests.post(url_tabela, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
-        print(f"✅ JSON do tipo '{tipo_do_json}' salvo no Supabase com sucesso.")
+        print(f"âœ… JSON do tipo '{tipo_do_json}' salvo no Supabase com sucesso.")
         return True
     except requests.exceptions.RequestException as e:
-        print(f"❌ Erro ao salvar JSON do tipo '{tipo_do_json}' no Supabase: {e}")
+        print(f"âŒ Erro ao salvar JSON do tipo '{tipo_do_json}' no Supabase: {e}")
         return False
 
 @app.route("/listar-lideres-consolidacao", methods=["GET", "OPTIONS"])
@@ -171,269 +171,26 @@ def listar_lideres_consolidacao():
         traceback.print_exc()
         return jsonify({"erro": str(e)}), 500
 
-@app.route("/listar-lideres-consolidacao-v2", methods=["GET", "OPTIONS"])
-def listar_lideres_consolidacao_v2():
-    if request.method == "OPTIONS":
-        return "", 204
 
-    empresa = request.args.get("empresa", "").strip().lower()
-    holding = request.args.get("holding", "").strip().lower()
-    codrodada = request.args.get("codrodada", "").strip().lower()
-
-    if (not empresa and not holding) or not codrodada:
-        return jsonify({"erro": "Informe empresa ou holding, e codrodada para listar os lideres."}), 400
-
-    if not SUPABASE_REST_URL or not SUPABASE_KEY:
-        return jsonify({"erro": "Supabase nao configurado no servico."}), 500
-
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}"
-    }
-
-    tabelas = [
-        ("relatorios_microambiente", "microambiente"),
-        ("relatorios_arquetipos", "arquetipos")
-    ]
-    lideres = {}
-
-    def norm(value):
-        return str(value or "").strip().lower()
-
-    def empresas_da_holding(holding_nome):
-        if not holding_nome:
-            return set()
-
-        url = f"{SUPABASE_REST_URL}/employees"
-        params = {
-            "select": "holding,empresa,company_name",
-            "holding": f"ilike.{holding_nome}",
-            "limit": "10000"
-        }
-
-        resp = requests.get(url, headers=headers, params=params, timeout=30)
-        if resp.status_code != 200:
-            print(f"Erro ao buscar empresas da holding: {resp.status_code} {resp.text}")
-            return set()
-
-        empresas = set()
-        for row in resp.json() or []:
-            for campo in ("empresa", "company_name"):
-                valor = norm(row.get(campo))
-                if valor:
-                    empresas.add(valor)
-        return empresas
-
-    def tipo_resposta(tipo):
-        tipo_norm = str(tipo or "").strip().lower()
-        if "auto" in tipo_norm:
-            return "autoavaliacoes"
-        if "equipe" in tipo_norm or "avaliacao" in tipo_norm or "avalia" in tipo_norm:
-            return "avaliacoes_equipe"
-        return "outras"
-
-    try:
-        empresa_filtro = "" if empresa in ("todas", "todos", "__todas__", "__todos__") else empresa
-        empresas_permitidas = empresas_da_holding(holding) if holding and not empresa_filtro else set()
-
-        if holding and not empresa_filtro and not empresas_permitidas:
-            return jsonify({
-                "erro": "Nenhuma empresa encontrada para a holding informada.",
-                "holding": holding
-            }), 404
-
-        for tabela, origem in tabelas:
-            url = f"{SUPABASE_REST_URL}/{tabela}"
-            params = {
-                "select": "empresa,emailLider,tipo,email",
-                "codrodada": f"eq.{codrodada}",
-                "emailLider": "not.is.null",
-                "limit": "10000"
-            }
-
-            if empresa_filtro:
-                params["empresa"] = f"eq.{empresa_filtro}"
-
-            resp = requests.get(url, headers=headers, params=params, timeout=30)
-            if resp.status_code != 200:
-                print(f"Erro ao listar lideres em {tabela}: {resp.status_code} {resp.text}")
-                return jsonify({
-                    "erro": f"Erro ao consultar {tabela}.",
-                    "detalhe": resp.text
-                }), 500
-
-            for row in resp.json() or []:
-                email_lider = str(row.get("emailLider") or "").strip().lower()
-                empresa_row = norm(row.get("empresa"))
-                if not email_lider or not empresa_row:
-                    continue
-
-                if empresas_permitidas and empresa_row not in empresas_permitidas:
-                    continue
-
-                chave = f"{empresa_row}|{email_lider}"
-
-                if chave not in lideres:
-                    lideres[chave] = {
-                        "empresa": empresa_row,
-                        "holding": holding or "",
-                        "emailLider": email_lider,
-                        "microambiente": {
-                            "autoavaliacoes": 0,
-                            "avaliacoes_equipe": 0,
-                            "outras": 0,
-                            "total": 0
-                        },
-                        "arquetipos": {
-                            "autoavaliacoes": 0,
-                            "avaliacoes_equipe": 0,
-                            "outras": 0,
-                            "total": 0
-                        },
-                        "total_respostas": 0
-                    }
-
-                bucket = lideres[chave][origem]
-                categoria = tipo_resposta(row.get("tipo"))
-                bucket[categoria] += 1
-                bucket["total"] += 1
-                lideres[chave]["total_respostas"] += 1
-
-        lista = sorted(lideres.values(), key=lambda item: (item["empresa"], item["emailLider"]))
-
-        return jsonify({
-            "success": True,
-            "empresa": empresa,
-            "holding": holding,
-            "codrodada": codrodada,
-            "total_lideres": len(lista),
-            "lideres": lista
-        }), 200
-
-    except Exception as e:
-        print("Erro geral em /listar-lideres-consolidacao-v2:", str(e))
-        traceback.print_exc()
-        return jsonify({"erro": str(e)}), 500
-
-
-@app.route("/listar-contextos-consolidacao", methods=["GET", "OPTIONS"])
-def listar_contextos_consolidacao():
-    if request.method == "OPTIONS":
-        return "", 204
-
-    if not SUPABASE_REST_URL or not SUPABASE_KEY:
-        return jsonify({"erro": "Supabase nao configurado no servico."}), 500
-
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}"
-    }
-
-    def norm(value):
-        return str(value or "").strip().lower()
-
-    try:
-        empresas_com_respostas = set()
-        for tabela in ("relatorios_microambiente", "relatorios_arquetipos"):
-            url = f"{SUPABASE_REST_URL}/{tabela}"
-            params = {
-                "select": "empresa",
-                "empresa": "not.is.null",
-                "limit": "10000"
-            }
-            resp = requests.get(url, headers=headers, params=params, timeout=30)
-            if resp.status_code == 200:
-                for row in resp.json() or []:
-                    empresa = norm(row.get("empresa"))
-                    if empresa:
-                        empresas_com_respostas.add(empresa)
-            else:
-                print(f"Erro ao consultar {tabela}: {resp.status_code} {resp.text}")
-
-        url_emp = f"{SUPABASE_REST_URL}/employees"
-        params_emp = {
-            "select": "holding,empresa,company_name",
-            "limit": "10000"
-        }
-        resp_emp = requests.get(url_emp, headers=headers, params=params_emp, timeout=30)
-        if resp_emp.status_code != 200:
-            return jsonify({
-                "erro": "Erro ao consultar employees.",
-                "detalhe": resp_emp.text
-            }), 500
-
-        empresas_map = {}
-        holdings_map = {}
-
-        for row in resp_emp.json() or []:
-            holding = norm(row.get("holding"))
-            empresa = norm(row.get("empresa") or row.get("company_name"))
-            if not empresa:
-                continue
-
-            if empresa not in empresas_map:
-                empresas_map[empresa] = {
-                    "empresa": empresa,
-                    "label": empresa.upper(),
-                    "holding": holding,
-                    "tem_respostas": empresa in empresas_com_respostas
-                }
-
-            if holding:
-                if holding not in holdings_map:
-                    holdings_map[holding] = {
-                        "holding": holding,
-                        "label": holding.upper(),
-                        "empresas": set(),
-                        "empresas_com_respostas": set()
-                    }
-                holdings_map[holding]["empresas"].add(empresa)
-                if empresa in empresas_com_respostas:
-                    holdings_map[holding]["empresas_com_respostas"].add(empresa)
-
-        holdings = []
-        for item in holdings_map.values():
-            holdings.append({
-                "holding": item["holding"],
-                "label": item["label"],
-                "empresas": sorted(item["empresas"]),
-                "qtd_empresas": len(item["empresas"]),
-                "qtd_empresas_com_respostas": len(item["empresas_com_respostas"])
-            })
-
-        empresas = sorted(empresas_map.values(), key=lambda item: item["label"])
-        holdings = sorted(holdings, key=lambda item: item["label"])
-
-        return jsonify({
-            "success": True,
-            "empresas": empresas,
-            "holdings": holdings
-        }), 200
-
-    except Exception as e:
-        print("Erro geral em /listar-contextos-consolidacao:", str(e))
-        traceback.print_exc()
-        return jsonify({"erro": str(e)}), 500
-
-# --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS --
+# --- 4. CARREGAMENTO DE PLANILHAS GLOBAIS ---
 try:
     TABELA_DIMENSAO_MICROAMBIENTE_DF = pd.read_excel("pontos_maximos_dimensao.xlsx")
     print("DEBUG: pontos_maximos_dimensao.xlsx carregada com sucesso.")
 except FileNotFoundError:
-    print("ERRO CRÍTICO: Arquivo 'pontos_maximos_dimensao.xlsx' não encontrado.")
+    print("ERRO CRÃTICO: Arquivo 'pontos_maximos_dimensao.xlsx' nÃ£o encontrado.")
     TABELA_DIMENSAO_MICROAMBIENTE_DF = pd.DataFrame()
 except Exception as e:
-    print(f"ERRO CRÍTICO: Ao carregar 'pontos_maximos_dimensao.xlsx': {str(e)}.")
+    print(f"ERRO CRÃTICO: Ao carregar 'pontos_maximos_dimensao.xlsx': {str(e)}.")
     TABELA_DIMENSAO_MICROAMBIENTE_DF = pd.DataFrame()
 
 try:
     TABELA_SUBDIMENSAO_MICROAMBIENTE_DF = pd.read_excel("pontos_maximos_subdimensao.xlsx")
     print("DEBUG: pontos_maximos_subdimensao.xlsx carregada com sucesso.")
 except FileNotFoundError:
-    print("ERRO CRÍTICO: Arquivo 'pontos_maximos_subdimensao.xlsx' não encontrado.")
+    print("ERRO CRÃTICO: Arquivo 'pontos_maximos_subdimensao.xlsx' nÃ£o encontrado.")
     TABELA_SUBDIMENSAO_MICROAMBIENTE_DF = pd.DataFrame()
 except Exception as e:
-    print(f"ERRO CRÍTICO: Ao carregar 'pontos_maximos_subdimensao.xlsx': {str(e)}.")
+    print(f"ERRO CRÃTICO: Ao carregar 'pontos_maximos_subdimensao.xlsx': {str(e)}.")
     TABELA_SUBDIMENSAO_MICROAMBIENTE_DF = pd.DataFrame()
 
 try:
@@ -443,14 +200,14 @@ try:
     )
     print("DEBUG: TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx carregada com sucesso.")
 except FileNotFoundError:
-    print("ERRO CRÍTICO: Arquivo 'TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx' não encontrado.")
+    print("ERRO CRÃTICO: Arquivo 'TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx' nÃ£o encontrado.")
     MATRIZ_MICROAMBIENTE_DF = pd.DataFrame()
 except Exception as e:
-    print(f"ERRO CRÍTICO: Ao carregar 'TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx': {str(e)}.")
+    print(f"ERRO CRÃTICO: Ao carregar 'TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx': {str(e)}.")
     MATRIZ_MICROAMBIENTE_DF = pd.DataFrame()
 
 
-# --- 5. DEFINIÇÕES DE ROTAS ---
+# --- 5. DEFINIÃ‡Ã•ES DE ROTAS ---
 @app.route("/")
 def home():
     return "API Microambiente Online"
@@ -528,7 +285,7 @@ def enviar_avaliacao():
     if not dados:
         return jsonify({"erro": "Nenhum dado recebido"}), 400
 
-    print("✅ Dados recebidos:", dados)
+    print("âœ… Dados recebidos:", dados)
 
     try:
         empresa = dados.get("empresa", "").strip().lower()
@@ -538,7 +295,7 @@ def enviar_avaliacao():
         email = dados.get("email", "").strip().lower()
 
         if not all([empresa, codrodada, emailLider, tipo, email]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         url_supabase = "https://xmsjjknpnowsswwrbvpc.supabase.co/rest/v1/relatorios_microambiente"
 
@@ -588,24 +345,24 @@ def enviar_avaliacao():
             "dados_json": dados
         }
 
-        print("📦 Registro sendo enviado ao Supabase:")
+        print("ðŸ“¦ Registro sendo enviado ao Supabase:")
         print(json.dumps(registro, indent=2, ensure_ascii=False))
 
         resposta = requests.post(url_supabase, headers=headers, json=registro)
 
         if resposta.status_code == 201:
-            print("✅ Avaliação salva no Supabase com sucesso!")
-            return jsonify({"status": "✅ Microambiente de Equipes → salvo no banco de dados"}), 200
+            print("âœ… AvaliaÃ§Ã£o salva no Supabase com sucesso!")
+            return jsonify({"status": "âœ… Microambiente de Equipes â†’ salvo no banco de dados"}), 200
         else:
-            print("❌ Erro Supabase:", resposta.status_code)
+            print("âŒ Erro Supabase:", resposta.status_code)
             try:
-                print("❌ Corpo da resposta:", resposta.json())
+                print("âŒ Corpo da resposta:", resposta.json())
             except:
-                print("❌ Corpo da resposta (raw):", resposta.text)
+                print("âŒ Corpo da resposta (raw):", resposta.text)
             return jsonify({"erro": resposta.text}), 500
 
     except Exception as e:
-        print("❌ Erro ao processar dados:", str(e))
+        print("âŒ Erro ao processar dados:", str(e))
         return jsonify({"erro": str(e)}), 500
 
 
@@ -662,7 +419,7 @@ def grafico_autoavaliacao():
     try:
         arquivo = request.files.get("arquivo_json")
         if not arquivo:
-            return jsonify({"erro": "Arquivo JSON não enviado"}), 400
+            return jsonify({"erro": "Arquivo JSON nÃ£o enviado"}), 400
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
         pontos_maximos = pd.read_excel("pontos_maximos_dimensao.xlsx")
@@ -670,7 +427,7 @@ def grafico_autoavaliacao():
         dados_json = json.load(arquivo)
         auto = dados_json.get("autoavaliacao")
         if not auto:
-            return jsonify({"erro": "Bloco 'autoavaliacao' não encontrado"}), 400
+            return jsonify({"erro": "Bloco 'autoavaliacao' nÃ£o encontrado"}), 400
 
         pontos_por_dimensao = {}
 
@@ -709,13 +466,13 @@ def grafico_autoavaliacao():
         valores_real = [porcentagens[d]["real"] for d in labels]
 
         fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(labels, valores_real, marker="o", label="Como é", color="navy")
+        ax.plot(labels, valores_real, marker="o", label="Como Ã©", color="navy")
         ax.plot(labels, valores_ideal, marker="o", label="Como deveria ser", color="darkorange")
         ax.axhline(60, color="gray", linestyle="--", linewidth=1)
         ax.set_ylim(0, 100)
         ax.set_yticks(range(0, 101, 10))
         ax.set_ylabel("% de Engajamento")
-        ax.set_title("MICROAMBIENTE DE EQUIPES – DIMENSÕES", fontsize=16, weight="bold")
+        ax.set_title("MICROAMBIENTE DE EQUIPES â€“ DIMENSÃ•ES", fontsize=16, weight="bold")
         ax.set_facecolor("#f2f2f2")
 
         ax.legend()
@@ -724,7 +481,7 @@ def grafico_autoavaliacao():
         nome_arquivo = "grafico_dimensoes_autoavaliacao.png"
         plt.savefig(nome_arquivo)
 
-        return jsonify({"status": "✅ Gráfico gerado com sucesso", "arquivo": nome_arquivo}), 200
+        return jsonify({"status": "âœ… GrÃ¡fico gerado com sucesso", "arquivo": nome_arquivo}), 200
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
@@ -756,7 +513,7 @@ def salvar_grafico_autoavaliacao():
         emaillider_req = dados.get("emailLider")
 
         if not all([empresa, codrodada, emaillider_req]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         tipo_relatorio_grafico_atual = "microambiente_grafico_autoavaliacao_dimensao"
 
@@ -784,7 +541,7 @@ def salvar_grafico_autoavaliacao():
             if data_criacao_cache_str:
                 data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
                 if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < timedelta(hours=1):
-                    print("✅ Cache válido encontrado. Retornando dados cacheados.")
+                    print("âœ… Cache vÃ¡lido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
 
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
@@ -802,7 +559,7 @@ def salvar_grafico_autoavaliacao():
         response.raise_for_status()
         data_list = response.json()
         if not data_list:
-            return jsonify({"erro": "Consolidado não encontrado."}), 404
+            return jsonify({"erro": "Consolidado nÃ£o encontrado."}), 404
 
         dados_consolidado = data_list[-1].get("dados_json", {})
         respostas_auto = dados_consolidado.get("autoavaliacao", {})
@@ -858,9 +615,9 @@ def salvar_grafico_autoavaliacao():
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
         dados_json = {
-            "titulo": "AUTOAVALIAÇÃO - DIMENSÕES",
+            "titulo": "AUTOAVALIAÃ‡ÃƒO - DIMENSÃ•ES",
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
-            "info_avaliacoes": "Autoavaliação do Líder",
+            "info_avaliacoes": "AutoavaliaÃ§Ã£o do LÃ­der",
             "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
         }
 
@@ -870,7 +627,7 @@ def salvar_grafico_autoavaliacao():
     except Exception as e:
         import traceback
         print("\n" + "="*60)
-        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-autoavaliacao")
+        print("ðŸš¨ ERRO CRÃTICO NA ROTA salvar-grafico-autoavaliacao")
         print(f"Tipo: {type(e).__name__}")
         print(f"Mensagem: {str(e)}")
         traceback.print_exc()
@@ -899,7 +656,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
         emaillider_req = dados.get("emailLider")
 
         if not all([empresa, codrodada, emaillider_req]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         tipo_relatorio_grafico_atual = "microambiente_grafico_autoavaliacao_subdimensao"
 
@@ -927,7 +684,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
             if data_criacao_cache_str:
                 data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
                 if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < timedelta(hours=1):
-                    print("✅ Cache válido encontrado. Retornando dados cacheados.")
+                    print("âœ… Cache vÃ¡lido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
 
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
@@ -944,7 +701,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
         response.raise_for_status()
         data_list = response.json()
         if not data_list:
-            return jsonify({"erro": "Consolidado não encontrado."}), 404
+            return jsonify({"erro": "Consolidado nÃ£o encontrado."}), 404
 
         dados_consolidado = data_list[-1].get("dados_json", {})
         respostas_auto = dados_consolidado.get("autoavaliacao", {})
@@ -998,9 +755,9 @@ def salvar_grafico_autoavaliacao_subdimensao():
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
         dados_json = {
-            "titulo": "AUTOAVALIAÇÃO - SUBDIMENSÕES",
+            "titulo": "AUTOAVALIAÃ‡ÃƒO - SUBDIMENSÃ•ES",
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
-            "info_avaliacoes": "Autoavaliação do Líder",
+            "info_avaliacoes": "AutoavaliaÃ§Ã£o do LÃ­der",
             "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
         }
 
@@ -1010,7 +767,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
     except Exception as e:
         import traceback
         print("\n" + "="*60)
-        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-autoavaliacao-subdimensao")
+        print("ðŸš¨ ERRO CRÃTICO NA ROTA salvar-grafico-autoavaliacao-subdimensao")
         print(f"Tipo: {type(e).__name__}")
         print(f"Mensagem: {str(e)}")
         traceback.print_exc()
@@ -1038,7 +795,7 @@ def salvar_grafico_media_equipe_dimensao():
         emaillider_req = dados.get("emailLider")
 
         if not all([empresa, codrodada, emaillider_req]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_dimensao"
 
@@ -1067,7 +824,7 @@ def salvar_grafico_media_equipe_dimensao():
                 data_criacao_cache = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
                 cache_validity_period = timedelta(hours=1)
                 if datetime.now(data_criacao_cache.tzinfo) - data_criacao_cache < cache_validity_period:
-                    print(f"✅ Cache válido encontrado. Retornando dados cacheados.")
+                    print(f"âœ… Cache vÃ¡lido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
 
         url_consolidado_microambiente = f"{SUPABASE_REST_URL}/consolidado_microambiente"
@@ -1086,7 +843,7 @@ def salvar_grafico_media_equipe_dimensao():
         consolidated_data_list = consolidado_response.json()
 
         if not consolidated_data_list:
-            return jsonify({"erro": "Consolidado de microambiente não encontrado."}), 404
+            return jsonify({"erro": "Consolidado de microambiente nÃ£o encontrado."}), 404
 
         microambiente_consolidado = consolidated_data_list[-1]
         dados_do_consolidado = microambiente_consolidado.get("dados_json", {})
@@ -1109,8 +866,8 @@ def salvar_grafico_media_equipe_dimensao():
 
         pontos_dim = TABELA_DIMENSAO_MICROAMBIENTE_DF
 
-        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
-        # depois faz média dos percentuais obtidos
+        # âœ… LÃ“GICA CORRETA: busca na tabela para cada respondente individualmente
+        # depois faz mÃ©dia dos percentuais obtidos
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
@@ -1143,7 +900,7 @@ def salvar_grafico_media_equipe_dimensao():
 
             if count > 0:
                 dim = matriz[matriz["CHAVE"] == f"{q}_I1_R1"]["DIMENSAO"].iloc[0] if not matriz[matriz["CHAVE"] == f"{q}_I1_R1"].empty else None
-                # Busca a dimensão pela questão
+                # Busca a dimensÃ£o pela questÃ£o
                 linhas_q = matriz[matriz["COD"] == q]
                 if not linhas_q.empty:
                     dim = linhas_q.iloc[0]["DIMENSAO"]
@@ -1165,7 +922,7 @@ def salvar_grafico_media_equipe_dimensao():
         numero_avaliacoes = len(avaliacoes)
 
         dados_json = {
-            "titulo": "MÉDIA DA EQUIPE - DIMENSÕES",
+            "titulo": "MÃ‰DIA DA EQUIPE - DIMENSÃ•ES",
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
             "info_avaliacoes": f"Equipe: {numero_avaliacoes} respondentes",
             "dados": resultado[["DIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
@@ -1177,7 +934,7 @@ def salvar_grafico_media_equipe_dimensao():
     except Exception as e:
         detailed_traceback = traceback.format_exc()
         print("\n" + "="*50)
-        print("🚨🚨🚨 ERRO CRÍTICO NA ROTA salvar-grafico-media-equipe-dimensao 🚨🚨🚨")
+        print("ðŸš¨ðŸš¨ðŸš¨ ERRO CRÃTICO NA ROTA salvar-grafico-media-equipe-dimensao ðŸš¨ðŸš¨ðŸš¨")
         print(f"Tipo do erro: {type(e).__name__}")
         print(f"Mensagem do erro: {str(e)}")
         traceback.print_exc()
@@ -1205,7 +962,7 @@ def salvar_grafico_media_equipe_subdimensao():
         emaillider_req = dados.get("emailLider")
 
         if not all([empresa, codrodada, emaillider_req]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         tipo_relatorio_grafico_atual = "microambiente_grafico_mediaequipe_subdimensao"
 
@@ -1251,7 +1008,7 @@ def salvar_grafico_media_equipe_subdimensao():
         consolidated_data_list = consolidado_response.json()
 
         if not consolidated_data_list:
-            return jsonify({"erro": "Consolidado não encontrado."}), 404
+            return jsonify({"erro": "Consolidado nÃ£o encontrado."}), 404
 
         microambiente_consolidado = consolidated_data_list[-1]
         dados_do_consolidado = microambiente_consolidado.get("dados_json", {})
@@ -1272,7 +1029,7 @@ def salvar_grafico_media_equipe_subdimensao():
             'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
 
-        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
+        # âœ… LÃ“GICA CORRETA: busca na tabela para cada respondente individualmente
         calculo = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
@@ -1329,7 +1086,7 @@ def salvar_grafico_media_equipe_subdimensao():
         numero_avaliacoes = len(avaliacoes)
 
         dados_json = {
-            "titulo": "MÉDIA DA EQUIPE - SUBDIMENSÕES",
+            "titulo": "MÃ‰DIA DA EQUIPE - SUBDIMENSÃ•ES",
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
             "info_avaliacoes": f"Equipe: {numero_avaliacoes} respondentes",
             "dados": resultado[["SUBDIMENSAO", "IDEAL_%", "REAL_%"]].to_dict(orient="records")
@@ -1364,7 +1121,7 @@ def salvar_grafico_waterfall_gaps():
         emailLider = dados.get("emailLider")
 
         if not all([empresa, codrodada, emailLider]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         tipo_relatorio = "microambiente_waterfall_gaps"
 
@@ -1391,7 +1148,7 @@ def salvar_grafico_waterfall_gaps():
             if data_criacao_str:
                 data_criacao = datetime.fromisoformat(data_criacao_str.replace("Z", "+00:00"))
                 if datetime.now(data_criacao.tzinfo) - data_criacao < timedelta(hours=1):
-                    print("✅ Cache válido encontrado. Retornando.")
+                    print("âœ… Cache vÃ¡lido encontrado. Retornando.")
                     return jsonify(dados_cache[0].get("dados_json", {})), 200
 
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
@@ -1406,12 +1163,12 @@ def salvar_grafico_waterfall_gaps():
         dados = resp.json()
 
         if not dados:
-            return jsonify({"erro": "Consolidado não encontrado."}), 404
+            return jsonify({"erro": "Consolidado nÃ£o encontrado."}), 404
 
         consolidado = dados[-1].get("dados_json", {})
         avaliacoes = consolidado.get("avaliacoesEquipe", [])
         if not avaliacoes:
-            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+            return jsonify({"erro": "Nenhuma avaliaÃ§Ã£o encontrada."}), 400
 
         matriz = MATRIZ_MICROAMBIENTE_DF
 
@@ -1428,7 +1185,7 @@ def salvar_grafico_waterfall_gaps():
             'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
 
-        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente, faz média dos GAPs
+        # âœ… LÃ“GICA CORRETA: busca na tabela para cada respondente, faz mÃ©dia dos GAPs
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
@@ -1482,7 +1239,7 @@ def salvar_grafico_waterfall_gaps():
             return ['#FFA07A' if abs(g) > 20 else '#ADD8E6' for g in gaps]
 
         sns.barplot(x="DIMENSAO", y="GAP", data=gap_dim, palette=get_gap_colors(gap_dim["GAP"]), ax=ax1)
-        ax1.set_title("GAP por Dimensão", fontsize=13)
+        ax1.set_title("GAP por DimensÃ£o", fontsize=13)
         ax1.set_ylabel("GAP (%)")
         ax1.set_ylim(-100, 0)
         ax1.yaxis.set_major_locator(mticker.MultipleLocator(10))
@@ -1492,7 +1249,7 @@ def salvar_grafico_waterfall_gaps():
             ax1.annotate(f'{h:.1f}%', (bar.get_x() + bar.get_width() / 2, h - 3), ha='center', fontsize=8)
 
         sns.barplot(x="SUBDIMENSAO", y="GAP", data=gap_sub, palette=get_gap_colors(gap_sub["GAP"]), ax=ax2)
-        ax2.set_title("GAP por Subdimensão", fontsize=13)
+        ax2.set_title("GAP por SubdimensÃ£o", fontsize=13)
         ax2.set_ylabel("GAP (%)")
         ax2.set_ylim(-100, 0)
         ax2.yaxis.set_major_locator(mticker.MultipleLocator(10))
@@ -1501,7 +1258,7 @@ def salvar_grafico_waterfall_gaps():
             h = bar.get_height()
             ax2.annotate(f'{h:.1f}%', (bar.get_x() + bar.get_width() / 2, h - 3), ha='center', fontsize=7)
 
-        fig.legend(["GAP > 20% = Laranja claro", "GAP ≤ 20% = Azul claro"],
+        fig.legend(["GAP > 20% = Laranja claro", "GAP â‰¤ 20% = Azul claro"],
                    loc='upper center', ncol=2, fontsize=9, bbox_to_anchor=(0.5, 1.02))
 
         plt.tight_layout(rect=[0, 0, 1, 0.95])
@@ -1511,7 +1268,7 @@ def salvar_grafico_waterfall_gaps():
 
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
         dados_json = {
-            "titulo": "GAP MÉDIO POR DIMENSÃO E SUBDIMENSÃO",
+            "titulo": "GAP MÃ‰DIO POR DIMENSÃƒO E SUBDIMENSÃƒO",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {data_hora}",
             "info_avaliacoes": f"Equipe: {len(avaliacoes)} respondentes",
             "dados": {
@@ -1529,7 +1286,7 @@ def salvar_grafico_waterfall_gaps():
     except Exception as e:
         import traceback
         print("\n" + "="*60)
-        print("🚨 ERRO CRÍTICO NA ROTA salvar-grafico-waterfall-gaps")
+        print("ðŸš¨ ERRO CRÃTICO NA ROTA salvar-grafico-waterfall-gaps")
         print(f"Tipo: {type(e).__name__}")
         print(f"Mensagem: {str(e)}")
         traceback.print_exc()
@@ -1558,7 +1315,7 @@ def relatorio_gaps_por_questao():
         emailLider = dados.get("emailLider")
 
         if not all([empresa, codrodada, emailLider]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = service_account.Credentials.from_service_account_info(
@@ -1578,7 +1335,7 @@ def relatorio_gaps_por_questao():
         id_lider = buscar_id(emailLider.lower(), id_rodada)
 
         if not id_lider:
-            return jsonify({"erro": "Pasta do líder não encontrada."}), 404
+            return jsonify({"erro": "Pasta do lÃ­der nÃ£o encontrada."}), 404
 
         arquivos = service.files().list(
             q=f"'{id_lider}' in parents and mimeType='application/json' and trashed = false",
@@ -1601,7 +1358,7 @@ def relatorio_gaps_por_questao():
                         dados_equipes.append(bloco)
 
         if not dados_equipes:
-            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+            return jsonify({"erro": "Nenhuma avaliaÃ§Ã£o encontrada."}), 400
 
         matriz = pd.read_excel("TABELA_GERAL_MICROAMBIENTE_COM_CHAVE.xlsx")
 
@@ -1618,7 +1375,7 @@ def relatorio_gaps_por_questao():
             'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
 
-        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
+        # âœ… LÃ“GICA CORRETA: busca na tabela para cada respondente individualmente
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
@@ -1680,7 +1437,7 @@ def relatorio_gaps_por_questao():
         for i, (bar, gap) in enumerate(zip(bars, df_sorted["GAP"])):
             ax.text(bar.get_width() - 3, bar.get_y() + bar.get_height()/2, f'{gap:.1f}%', va='center', ha='right', fontsize=7, color="white")
 
-        ax.set_title("ANÁLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO", fontsize=14, weight="bold")
+        ax.set_title("ANÃLISE DE MICROAMBIENTE - OPORTUNIDADES DE DESENVOLVIMENTO", fontsize=14, weight="bold")
         ax.set_xlabel("GAP (%)")
         ax.set_xlim(-100, 0)
         ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
@@ -1697,13 +1454,13 @@ def relatorio_gaps_por_questao():
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
         dados_json = {
-            "titulo": "ANÁLISE DE MICROAMBIENTE - GAP POR QUESTÃO",
+            "titulo": "ANÃLISE DE MICROAMBIENTE - GAP POR QUESTÃƒO",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {pd.Timestamp.now().strftime('%d/%m/%Y')}",
             "dados": df[["QUESTAO", "DIMENSAO", "SUBDIMENSAO", "GAP", "AFIRMACAO"]].to_dict(orient="records")
         }
         salvar_json_ia_no_drive(dados_json, nome_arquivo, service, id_lider)
 
-        return jsonify({"mensagem": f"✅ Relatório salvo com sucesso no Google Drive: {nome_arquivo}"}), 200
+        return jsonify({"mensagem": f"âœ… RelatÃ³rio salvo com sucesso no Google Drive: {nome_arquivo}"}), 200
 
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
@@ -1731,7 +1488,7 @@ def relatorio_analitico_microambiente_supabase():
         emailLider = dados.get("emailLider")
 
         if not all([empresa, codrodada, emailLider]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
         headers = {
@@ -1749,13 +1506,13 @@ def relatorio_analitico_microambiente_supabase():
         consolidado = response.json()
 
         if not consolidado:
-            return jsonify({"erro": "Consolidado não encontrado."}), 404
+            return jsonify({"erro": "Consolidado nÃ£o encontrado."}), 404
 
         microambiente = consolidado[-1].get("dados_json", {})
         avaliacoes = microambiente.get("avaliacoesEquipe", [])
 
         if not avaliacoes:
-            return jsonify({"erro": "Nenhuma avaliação encontrada."}), 400
+            return jsonify({"erro": "Nenhuma avaliaÃ§Ã£o encontrada."}), 400
 
         matriz = MATRIZ_MICROAMBIENTE_DF
 
@@ -1774,7 +1531,7 @@ def relatorio_analitico_microambiente_supabase():
 
         num_avaliacoes = len(avaliacoes)
 
-        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente individualmente
+        # âœ… LÃ“GICA CORRETA: busca na tabela para cada respondente individualmente
         registros = []
         for i in range(1, 49):
             q = f"Q{i:02d}"
@@ -1828,7 +1585,7 @@ def relatorio_analitico_microambiente_supabase():
                 })
 
         dados_json = {
-            "titulo": "RELATÓRIO ANALÍTICO DE MICROAMBIENTE",
+            "titulo": "RELATÃ“RIO ANALÃTICO DE MICROAMBIENTE",
             "subtitulo": f"{empresa} / {emailLider} / {codrodada} / {datetime.now().strftime('%d/%m/%Y')}",
             "numeroAvaliacoes": num_avaliacoes,
             "dados": registros
@@ -1840,7 +1597,7 @@ def relatorio_analitico_microambiente_supabase():
 
     except Exception as e:
         print("\n" + "="*60)
-        print("🚨 ERRO CRÍTICO NA ROTA relatorio-analitico-microambiente-supabase")
+        print("ðŸš¨ ERRO CRÃTICO NA ROTA relatorio-analitico-microambiente-supabase")
         print(f"Tipo: {type(e).__name__}")
         print(f"Mensagem: {str(e)}")
         traceback.print_exc()
@@ -1873,7 +1630,7 @@ def salvar_grafico_termometro_gaps():
         emaillider_req = dados_requisicao.get("emailLider")
 
         if not all([empresa, codrodada, emaillider_req]):
-            return jsonify({"erro": "Campos obrigatórios ausentes."}), 400
+            return jsonify({"erro": "Campos obrigatÃ³rios ausentes."}), 400
 
         tipo_relatorio_grafico_atual = "microambiente_termometro_gaps"
 
@@ -1902,7 +1659,7 @@ def salvar_grafico_termometro_gaps():
                 data_criacao = datetime.fromisoformat(data_criacao_cache_str.replace('Z', '+00:00'))
                 cache_validity_period = timedelta(hours=1)
                 if datetime.now(data_criacao.tzinfo) - data_criacao < cache_validity_period:
-                    print(f"✅ Cache válido encontrado. Retornando dados cacheados.")
+                    print(f"âœ… Cache vÃ¡lido encontrado. Retornando dados cacheados.")
                     return jsonify(cached_report.get("dados_json", {})), 200
 
         url_consolidado = f"{SUPABASE_REST_URL}/consolidado_microambiente"
@@ -1921,13 +1678,13 @@ def salvar_grafico_termometro_gaps():
         dados_consolidado = resp_consolidado.json()
 
         if not dados_consolidado:
-            return jsonify({"erro": "Consolidado não encontrado."}), 404
+            return jsonify({"erro": "Consolidado nÃ£o encontrado."}), 404
 
         microambiente_consolidado = dados_consolidado[-1].get("dados_json", {})
         avaliacoes = microambiente_consolidado.get("avaliacoesEquipe", [])
 
         if not avaliacoes:
-            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada no consolidado."}), 400
+            return jsonify({"erro": "Nenhuma avaliaÃ§Ã£o de equipe encontrada no consolidado."}), 400
 
         matriz = MATRIZ_MICROAMBIENTE_DF
 
@@ -1944,7 +1701,7 @@ def salvar_grafico_termometro_gaps():
             'Q46': 'Q07', 'Q47': 'Q08', 'Q48': 'Q09'
         }
 
-        # ✅ LÓGICA CORRETA: busca na tabela para cada respondente, conta GAPs > 20
+        # âœ… LÃ“GICA CORRETA: busca na tabela para cada respondente, conta GAPs > 20
         gap_count = 0
         num_avaliacoes = len(avaliacoes)
 
@@ -1980,15 +1737,15 @@ def salvar_grafico_termometro_gaps():
 
         def classificar_microambiente(gaps):
             if gaps <= 3:
-                return "ALTO ESTÍMULO"
+                return "ALTO ESTÃMULO"
             elif gaps <= 6:
-                return "ESTÍMULO"
+                return "ESTÃMULO"
             elif gaps <= 9:
                 return "NEUTRO"
             elif gaps <= 12:
-                return "BAIXO ESTÍMULO"
+                return "BAIXO ESTÃMULO"
             else:
-                return "DESMOTIVAÇÃO"
+                return "DESMOTIVAÃ‡ÃƒO"
 
         classificacao_texto = classificar_microambiente(gap_count)
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -1996,10 +1753,10 @@ def salvar_grafico_termometro_gaps():
         fig, ax = plt.subplots(figsize=(6, 6))
         ax.set_xlim(0, 10)
         ax.set_ylim(0, 10)
-        ax.text(5, 5, f"GAPs: {gap_count}\nClassificação: {classificacao_texto}",
+        ax.text(5, 5, f"GAPs: {gap_count}\nClassificaÃ§Ã£o: {classificacao_texto}",
                 ha='center', va='center', fontsize=16, color='black')
         ax.axis('off')
-        plt.title(f"TERMÔMETRO DE GAPS\n{empresa} - {codrodada} - {emaillider_req}", fontsize=14)
+        plt.title(f"TERMÃ”METRO DE GAPS\n{empresa} - {codrodada} - {emaillider_req}", fontsize=14)
         plt.tight_layout()
 
         import io
@@ -2010,7 +1767,7 @@ def salvar_grafico_termometro_gaps():
         imagem_base64 = base64.b64encode(buf.read()).decode("utf-8")
 
         dados_json_retorno = {
-            "titulo": "STATUS - TERMÔMETRO DE MICROAMBIENTE",
+            "titulo": "STATUS - TERMÃ”METRO DE MICROAMBIENTE",
             "subtitulo": f"{empresa} / {emaillider_req} / {codrodada} / {data_hora}",
             "info_avaliacoes": f"Equipe: {num_avaliacoes} respondentes",
             "qtdGapsAcima20": gap_count,
@@ -2025,7 +1782,7 @@ def salvar_grafico_termometro_gaps():
     except Exception as e:
         detailed_traceback = traceback.format_exc()
         print("\n" + "="*50)
-        print("🚨🚨🚨 ERRO CRÍTICO NA ROTA salvar-grafico-termometro-gaps 🚨🚨🚨")
+        print("ðŸš¨ðŸš¨ðŸš¨ ERRO CRÃTICO NA ROTA salvar-grafico-termometro-gaps ðŸš¨ðŸš¨ðŸš¨")
         print(f"Tipo do erro: {type(e).__name__}")
         print(f"Mensagem do erro: {str(e)}")
         traceback.print_exc()
@@ -2044,7 +1801,7 @@ def salvar_consolidado_microambiente():
         codrodada = dados.get("codrodada", "").strip().lower()
         emailLider = dados.get("emailLider", "").strip().lower()
 
-        print(f"✅ Dados recebidos: {empresa} {codrodada} {emailLider}")
+        print(f"âœ… Dados recebidos: {empresa} {codrodada} {emailLider}")
 
         supabase_url = os.environ.get("SUPABASE_REST_URL")
         supabase_key = os.environ.get("SUPABASE_KEY")
@@ -2055,29 +1812,42 @@ def salvar_consolidado_microambiente():
             "Content-Type": "application/json"
         }
 
-        filtro_auto = f"?select=dados_json,data_criacao&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=ilike.microambiente_autoavaliacao&order=data_criacao.asc&limit=1"
-        url_auto = f"{supabase_url}/relatorios_microambiente{filtro_auto}"
-        resp_auto = requests.get(url_auto, headers=headers)
+        url_auto = f"{supabase_url}/relatorios_microambiente"
+        resp_auto = requests.get(url_auto, headers=headers, params={
+            "select": "dados_json,data_criacao",
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emailLider": f"eq.{emailLider}",
+            "tipo": "ilike.microambiente_autoavaliacao",
+            "order": "data_criacao.asc",
+            "limit": "1",
+        })
         auto_data = resp_auto.json()
-        print("📥 Resultado da requisição AUTO:", auto_data)
+        print("ðŸ“¥ Resultado da requisiÃ§Ã£o AUTO:", auto_data)
 
         if not auto_data:
-            print("❌ microambiente_autoavaliacao não encontrada.")
-            return jsonify({"erro": "microambiente_autoavaliacao não encontrada."}), 404
+            print("âŒ microambiente_autoavaliacao nÃ£o encontrada.")
+            return jsonify({"erro": "microambiente_autoavaliacao nÃ£o encontrada."}), 404
 
         autoavaliacao = auto_data[0]["dados_json"]
 
-        filtro_equipe = f"?select=dados_json,data_criacao,email&empresa=eq.{empresa}&codrodada=eq.{codrodada}&emailLider=eq.{emailLider}&tipo=eq.microambiente_equipe&order=data_criacao.asc"
-        url_equipe = f"{supabase_url}/relatorios_microambiente{filtro_equipe}"
-        resp_equipe = requests.get(url_equipe, headers=headers)
+        url_equipe = f"{supabase_url}/relatorios_microambiente"
+        resp_equipe = requests.get(url_equipe, headers=headers, params={
+            "select": "dados_json,data_criacao,email",
+            "empresa": f"eq.{empresa}",
+            "codrodada": f"eq.{codrodada}",
+            "emailLider": f"eq.{emailLider}",
+            "tipo": "eq.microambiente_equipe",
+            "order": "data_criacao.asc",
+        })
         equipe_data = resp_equipe.json()
-        print("📥 Resultado da requisição EQUIPE:", equipe_data)
+        print("ðŸ“¥ Resultado da requisiÃ§Ã£o EQUIPE:", equipe_data)
 
         avaliacoes_equipe = primeiras_respostas_por_email(equipe_data)
 
         if not avaliacoes_equipe:
-            print("❌ Nenhuma avaliação de equipe encontrada.")
-            return jsonify({"erro": "Nenhuma avaliação de equipe encontrada."}), 404
+            print("âŒ Nenhuma avaliaÃ§Ã£o de equipe encontrada.")
+            return jsonify({"erro": "Nenhuma avaliaÃ§Ã£o de equipe encontrada."}), 404
 
         consolidado = {
             "autoavaliacao": autoavaliacao,
@@ -2094,9 +1864,6 @@ def salvar_consolidado_microambiente():
         }
 
         url_final = f"{supabase_url}/consolidado_microambiente"
-
-
-        
         filtro_existente = {
             "select": "id",
             "empresa": f"eq.{empresa}",
@@ -2106,13 +1873,13 @@ def salvar_consolidado_microambiente():
             "limit": "1"
         }
         resp_existente = requests.get(url_final, headers=headers, params=filtro_existente, timeout=30)
-        
+
         if resp_existente.status_code != 200:
             print("Erro ao verificar consolidado existente:", resp_existente.text)
             return jsonify({"erro": "Erro ao verificar consolidado existente."}), 500
-        
+
         existentes = resp_existente.json() or []
-        
+
         if existentes:
             consolidado_id = existentes[0].get("id")
             url_update = f"{url_final}?id=eq.{consolidado_id}"
@@ -2122,19 +1889,15 @@ def salvar_consolidado_microambiente():
             resp_final = requests.post(url_final, headers=headers, json=payload, timeout=30)
             acao = "criado"
 
-        
-
-        if resp_final.status_code not in [200, 201, 204]:
-
-            
-            print("❌ Erro ao salvar no Supabase:", resp_final.text)
+        if resp_final.status_code not in [200, 201]:
+            print("âŒ Erro ao salvar no Supabase:", resp_final.text)
             return jsonify({"erro": "Erro ao salvar consolidado."}), 500
 
-        print("✅ Consolidado salvo com sucesso.")
+        print("âœ… Consolidado salvo com sucesso.")
         return jsonify({"mensagem": "Consolidado salvo com sucesso."})
 
     except Exception as e:
-        print("💥 ERRO GERAL:", str(e))
+        print("ðŸ’¥ ERRO GERAL:", str(e))
         return jsonify({"erro": str(e)}), 500
 
 
@@ -2145,7 +1908,7 @@ def recuperar_json():
     email_lider = request.args.get("emaillider", "").strip().lower()
     tipo_relatorio = request.args.get("tipo_relatorio", "").strip()
 
-    print("🔍 RECEBIDO NA ROTA /recuperar-json")
+    print("ðŸ” RECEBIDO NA ROTA /recuperar-json")
     print("empresa:", empresa)
     print("codrodada:", rodada)
     print("email_lider:", email_lider)
@@ -2169,25 +1932,25 @@ def recuperar_json():
 
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=15)
-        print("🔗 URL Final Supabase:", resp.url)
-        print("📦 Status Supabase:", resp.status_code)
-        print("📄 Resposta Supabase (texto):", resp.text)
+        print("ðŸ”— URL Final Supabase:", resp.url)
+        print("ðŸ“¦ Status Supabase:", resp.status_code)
+        print("ðŸ“„ Resposta Supabase (texto):", resp.text)
 
         resp.raise_for_status()
 
         resultados = resp.json()
         if not resultados:
-            return jsonify({"erro": f"JSON do tipo '{tipo_relatorio}' não encontrado para os dados fornecidos."}), 404
+            return jsonify({"erro": f"JSON do tipo '{tipo_relatorio}' nÃ£o encontrado para os dados fornecidos."}), 404
 
         return jsonify(resultados[0]["dados_json"])
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Erro de comunicação com o Supabase na rota /recuperar-json: {e}")
+        print(f"âŒ Erro de comunicaÃ§Ã£o com o Supabase na rota /recuperar-json: {e}")
         detailed_traceback = traceback.format_exc()
         print(f"TRACEBACK COMPLETO:\n{detailed_traceback}")
-        return jsonify({"erro": f"Erro de comunicação com o Supabase: {str(e)}", "debug_info": "Verifique os logs."}), 500
+        return jsonify({"erro": f"Erro de comunicaÃ§Ã£o com o Supabase: {str(e)}", "debug_info": "Verifique os logs."}), 500
     except Exception as e:
-        print(f"❌ Erro geral na rota /recuperar-json: {e}")
+        print(f"âŒ Erro geral na rota /recuperar-json: {e}")
         detailed_traceback = traceback.format_exc()
         print(f"TRACEBACK COMPLETO:\n{detailed_traceback}")
         return jsonify({"erro": str(e), "debug_info": "Verifique os logs para detalhes."}), 500
@@ -2207,7 +1970,7 @@ def debug_json():
     )
 
     url = f"{SUPABASE_REST_URL}/relatorios_gerados{filtro}"
-    print(f"🔎 URL Supabase: {url}")
+    print(f"ðŸ”Ž URL Supabase: {url}")
 
     headers = {
         "apikey": SUPABASE_KEY,
@@ -2215,8 +1978,8 @@ def debug_json():
     }
 
     resp = requests.get(url, headers=headers)
-    print(f"📦 Status Supabase: {resp.status_code}")
-    print(f"📄 Resposta Supabase: {resp.text}")
+    print(f"ðŸ“¦ Status Supabase: {resp.status_code}")
+    print(f"ðŸ“„ Resposta Supabase: {resp.text}")
 
     if resp.status_code == 200:
         return jsonify(resp.json())
