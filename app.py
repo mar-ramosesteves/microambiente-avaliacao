@@ -82,12 +82,25 @@ def listar_lideres_consolidacao():
         return "", 204
 
     empresa = request.args.get("empresa", "").strip().lower()
+    holding = request.args.get("holding", "").strip().lower()
     codrodada = request.args.get("codrodada", "").strip().lower()
 
     empresa_eh_todas = (
         not empresa
         or empresa in ["todas", "todos", "todas as empresas da holding", "all", "*"]
     )
+    empresas_por_holding = {
+        "leven": ["adm", "fisioterapia", "ucb", "umi", "ump", "up", "teste"],
+        "prospera": [
+            "astro34",
+            "fastco",
+            "futurex",
+            "spectral",
+            "spectral_a",
+            "spectral_sales",
+            "spectral_v"
+        ],
+    }
 
     if not codrodada:
         return jsonify({"erro": "Informe empresa e codrodada para listar os lideres."}), 400
@@ -125,6 +138,8 @@ def listar_lideres_consolidacao():
             }
             if not empresa_eh_todas:
                 params["empresa"] = f"eq.{empresa}"
+            elif holding in empresas_por_holding:
+                params["empresa"] = "in.(" + ",".join(empresas_por_holding[holding]) + ")"
 
             resp = requests.get(url, headers=headers, params=params, timeout=30)
             if resp.status_code != 200:
