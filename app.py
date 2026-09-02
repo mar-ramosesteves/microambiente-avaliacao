@@ -14,7 +14,11 @@ SUPABASE_REST_URL = os.environ.get("SUPABASE_REST_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 # --- 2. INICIALIZAÃ‡ÃƒO DO FLASK E CORS ---
+from leadertrack_admission import admission_enabled
+from leadertrack_admission_source import get_eligible_consolidated, attach_admission_sample, register_admission_metadata, cached_sample_is_current
+
 app = Flask(__name__)
+register_admission_metadata(app)
 CORS(app, resources={r"/*": {"origins": ["https://gestor.thehrkey.tech"]}}, supports_credentials=True)
 
 # --- 3. FUNÃ‡Ã•ES AUXILIARES GLOBAIS ---
@@ -62,7 +66,7 @@ def salvar_json_no_supabase(dados_para_salvar, empresa, codrodada, emaillider_va
         "codrodada": codrodada,
         "emaillider": emaillider_val,
         "tipo_relatorio": tipo_do_json,
-        "dados_json": dados_para_salvar,
+        "dados_json": attach_admission_sample(dados_para_salvar),
         "data_criacao": datetime.now().isoformat()
     }
 
@@ -560,7 +564,7 @@ def salvar_grafico_autoavaliacao():
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
 
-        if cached_data_list:
+        if cached_data_list and not admission_enabled(codrodada):
             cached_report = cached_data_list[0]
             data_criacao_cache_str = cached_report.get("data_criacao")
             if data_criacao_cache_str:
@@ -580,7 +584,7 @@ def salvar_grafico_autoavaliacao():
             "emaillider": f"eq.{emaillider_req}"
         }
 
-        response = requests.get(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
+        response = get_eligible_consolidated(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
         response.raise_for_status()
         data_list = response.json()
         if not data_list:
@@ -703,7 +707,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
 
-        if cached_data_list:
+        if cached_data_list and not admission_enabled(codrodada):
             cached_report = cached_data_list[0]
             data_criacao_cache_str = cached_report.get("data_criacao")
             if data_criacao_cache_str:
@@ -722,7 +726,7 @@ def salvar_grafico_autoavaliacao_subdimensao():
             "codrodada": f"eq.{codrodada}",
             "emaillider": f"eq.{emaillider_req}"
         }
-        response = requests.get(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
+        response = get_eligible_consolidated(url_consolidado, headers=headers_consolidado, params=params_consolidado, timeout=30)
         response.raise_for_status()
         data_list = response.json()
         if not data_list:
@@ -842,7 +846,7 @@ def salvar_grafico_media_equipe_dimensao():
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
 
-        if cached_data_list:
+        if cached_data_list and not admission_enabled(codrodada):
             cached_report = cached_data_list[0]
             data_criacao_cache_str = cached_report.get("data_criacao")
             if data_criacao_cache_str:
@@ -863,7 +867,7 @@ def salvar_grafico_media_equipe_dimensao():
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
 
-        consolidado_response = requests.get(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
+        consolidado_response = get_eligible_consolidated(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
         consolidado_response.raise_for_status()
         consolidated_data_list = consolidado_response.json()
 
@@ -1009,7 +1013,7 @@ def salvar_grafico_media_equipe_subdimensao():
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
 
-        if cached_data_list:
+        if cached_data_list and not admission_enabled(codrodada):
             cached_report = cached_data_list[0]
             data_criacao_cache_str = cached_report.get("data_criacao")
             if data_criacao_cache_str:
@@ -1028,7 +1032,7 @@ def salvar_grafico_media_equipe_subdimensao():
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
 
-        consolidado_response = requests.get(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
+        consolidado_response = get_eligible_consolidated(url_consolidado_microambiente, headers=headers_consolidado_busca, params=params_consolidado, timeout=30)
         consolidado_response.raise_for_status()
         consolidated_data_list = consolidado_response.json()
 
@@ -1168,7 +1172,7 @@ def salvar_grafico_waterfall_gaps():
         resp.raise_for_status()
         dados_cache = resp.json()
 
-        if dados_cache:
+        if dados_cache and not admission_enabled(codrodada):
             data_criacao_str = dados_cache[0].get("data_criacao", "")
             if data_criacao_str:
                 data_criacao = datetime.fromisoformat(data_criacao_str.replace("Z", "+00:00"))
@@ -1183,7 +1187,7 @@ def salvar_grafico_waterfall_gaps():
             "emaillider": f"eq.{emailLider}"
         }
 
-        resp = requests.get(url_consolidado, headers=headers, params=params_consolidado, timeout=30)
+        resp = get_eligible_consolidated(url_consolidado, headers=headers, params=params_consolidado, timeout=30)
         resp.raise_for_status()
         dados = resp.json()
 
@@ -1526,7 +1530,7 @@ def relatorio_analitico_microambiente_supabase():
             "emaillider": f"eq.{emailLider}"
         }
 
-        response = requests.get(url_consolidado, headers=headers, params=params, timeout=30)
+        response = get_eligible_consolidated(url_consolidado, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         consolidado = response.json()
 
@@ -1677,7 +1681,7 @@ def salvar_grafico_termometro_gaps():
         cache_response.raise_for_status()
         cached_data_list = cache_response.json()
 
-        if cached_data_list:
+        if cached_data_list and not admission_enabled(codrodada):
             cached_report = cached_data_list[0]
             data_criacao_cache_str = cached_report.get("data_criacao", "")
             if data_criacao_cache_str:
@@ -1698,7 +1702,7 @@ def salvar_grafico_termometro_gaps():
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
 
-        resp_consolidado = requests.get(url_consolidado, headers=headers_consolidado_busca, params=params_cons, timeout=30)
+        resp_consolidado = get_eligible_consolidated(url_consolidado, headers=headers_consolidado_busca, params=params_cons, timeout=30)
         resp_consolidado.raise_for_status()
         dados_consolidado = resp_consolidado.json()
 
@@ -1967,7 +1971,10 @@ def recuperar_json():
         if not resultados:
             return jsonify({"erro": f"JSON do tipo '{tipo_relatorio}' nÃ£o encontrado para os dados fornecidos."}), 404
 
-        return jsonify(resultados[0]["dados_json"])
+        cached = resultados[0]["dados_json"]
+        if not cached_sample_is_current(cached, SUPABASE_REST_URL, headers, empresa, rodada, email_lider):
+            return jsonify({"erro": "Grafico anterior a regra de admissao ou com amostra alterada. Gere o grafico novamente.", "regenerar": True}), 409
+        return jsonify(cached)
 
     except requests.exceptions.RequestException as e:
         print(f"âŒ Erro de comunicaÃ§Ã£o com o Supabase na rota /recuperar-json: {e}")
@@ -2014,3 +2021,4 @@ def debug_json():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
+
